@@ -22,7 +22,10 @@ export const sendPost = mutation({
 });
 
 export const listPosts = query({
-    handler: async (ctx) => {
+    args: {
+        sortBy: v.optional(v.union(v.literal("newest"), v.literal("mostLiked"))),
+    },
+    handler: async (ctx, args) => {
         const identity = await ctx.auth.getUserIdentity();
         const user = identity
             ? await ctx.db
@@ -33,7 +36,7 @@ export const listPosts = query({
 
         const posts = await ctx.db.query("posts").order("desc").collect();
 
-        return Promise.all(
+        const postsWithDetails = await Promise.all(
             posts.map(async (post) => {
                 const likes = await ctx.db
                     .query("likes")
@@ -52,6 +55,12 @@ export const listPosts = query({
                 };
             })
         );
+
+        if (args.sortBy === "mostLiked") {
+            return postsWithDetails.sort((a, b) => b.likeCount - a.likeCount);
+        }
+
+        return postsWithDetails;
     },
 });
 

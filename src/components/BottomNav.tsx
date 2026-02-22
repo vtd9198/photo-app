@@ -18,7 +18,7 @@ export default function BottomNav() {
     if (pathname === "/passcode") return null;
 
     return (
-        <div className="fixed bottom-0 w-full max-w-md mx-auto bg-background/80 backdrop-blur-xl border-t border-primary/10 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-2 px-6 z-50">
+        <div className="fixed bottom-0 w-full max-w-md mx-auto bg-background/70 backdrop-blur-xl border-t border-primary/20 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-2 px-6 z-50">
             <div className="flex justify-between items-center h-14">
                 <NavItem href="/" icon={<ImageIcon size={24} />} isActive={pathname === "/"} label="Gallery" />
 
