@@ -3,7 +3,7 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Download, Heart } from "lucide-react";
 import type { Post } from "./GalleryGrid";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export default function MediaModal({
     post,
@@ -14,6 +14,14 @@ export default function MediaModal({
 }) {
     const [liked, setLiked] = useState(false);
 
+    useEffect(() => {
+        const handleEsc = (e: KeyboardEvent) => {
+            if (e.key === "Escape") onClose();
+        };
+        window.addEventListener("keydown", handleEsc);
+        return () => window.removeEventListener("keydown", handleEsc);
+    }, [onClose]);
+
     if (!post) return null;
 
     return (
@@ -23,12 +31,16 @@ export default function MediaModal({
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-xl flex flex-col pt-safe-top"
+                role="dialog"
+                aria-modal="true"
+                aria-label="Memory details"
             >
                 {/* Top Header */}
                 <div className="flex justify-between items-center p-4">
                     <button
                         onClick={onClose}
                         className="p-2 bg-white/10 backdrop-blur-md rounded-full text-white"
+                        aria-label="Close"
                     >
                         <X size={24} />
                     </button>
@@ -41,6 +53,7 @@ export default function MediaModal({
                                 target="_blank"
                                 rel="noreferrer"
                                 className="p-2 bg-white/10 backdrop-blur-md rounded-full text-white"
+                                aria-label="Download media"
                             >
                                 <Download size={24} />
                             </a>
@@ -91,6 +104,8 @@ export default function MediaModal({
                             whileTap={{ scale: 0.8 }}
                             onClick={() => setLiked(!liked)}
                             className="ml-4"
+                            aria-label={liked ? "Unlike memory" : "Like memory"}
+                            aria-pressed={liked}
                         >
                             <Heart
                                 size={32}
