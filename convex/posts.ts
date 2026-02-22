@@ -23,14 +23,71 @@ export const sendPost = mutation({
 
 export const listPosts = query({
     handler: async (ctx) => {
+        const identity = await ctx.auth.getUserIdentity();
+        const user = identity
+            ? await ctx.db
+                .query("users")
+                .withIndex("by_externalId", (q) => q.eq("externalId", identity.subject))
+                .unique()
+            : null;
+
         const posts = await ctx.db.query("posts").order("desc").collect();
 
-        // Map storageId to public URLs
         return Promise.all(
-            posts.map(async (post) => ({
-                ...post,
-                mediaUrl: await ctx.storage.getUrl(post.storageId),
-            }))
+            posts.map(async (post) => {
+                const likes = await ctx.db
+                    .query("likes")
+                    .withIndex("by_postId", (q) => q.eq("postId", post._id))
+                    .collect();
+
+                const isLikedByMe = user
+                    ? likes.some((like) => like.userId === user._id)
+                    : false;
+
+                return {
+                    ...post,
+                    mediaUrl: await ctx.storage.getUrl(post.storageId),
+                    likeCount: likes.length,
+                    isLikedByMe,
+                };
+            })
         );
+    },
+});
+
+export const toggleLike = mutation({
+    args: {
+        postId: v.id("posts"),
+    },
+    handler: async (ctx, args) => {
+        const identity = await ctx.auth.getUserIdentity();
+        if (!identity) {
+            throw new Error("Unauthorized");
+        }
+
+        const user = await ctx.db
+            .query("users")
+            .withIndex("by_externalId", (q) => q.eq("externalId", identity.subject))
+            .unique();
+
+        if (!user) {
+            throw new Error("User not found");
+        }
+
+        const existingLike = await ctx.db
+            .query("likes")
+            .withIndex("by_userId_postId", (q) =>
+                q.eq("userId", user._id).eq("postId", args.postId)
+            )
+            .unique();
+
+        if (existingLike) {
+            await ctx.db.delete(existingLike._id);
+        } else {
+            await ctx.db.insert("likes", {
+                userId: user._id,
+                postId: args.postId,
+            });
+        }
     },
 });
