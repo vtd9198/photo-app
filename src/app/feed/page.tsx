@@ -16,9 +16,12 @@ export default function Home() {
     <div className="pt-24">
       <header className="fixed top-0 left-0 right-0 z-40 bg-background/80 backdrop-blur-xl border-b border-primary/10">
         <div className="max-w-md mx-auto px-6 h-20 flex justify-between items-center gap-4">
-          <h1 className="font-playfair font-bold text-lg text-primary shrink-0">
-            Ala&apos;s 18th Birthday
-          </h1>
+          <div className="flex flex-col">
+            <h1 className="font-serif font-bold text-lg text-primary">
+              Ala&apos;s 18th Birthday
+            </h1>
+            <p className="text-[10px] uppercase tracking-widest font-bold text-foreground/40 leading-none">Party Feed 🥂</p>
+          </div>
           <div className="flex items-center gap-4 flex-1 justify-end min-w-0">
             <div className="relative max-w-[150px] w-full">
               <input
