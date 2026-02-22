@@ -34,7 +34,9 @@ export default function ProfilePage() {
         return (
             <div className="flex flex-col items-center justify-center min-h-[60vh] px-6 text-center">
                 <p className="text-foreground/60 mb-4">Please sign in to view your profile.</p>
-                <UserButton afterSignOutUrl="/" />
+                <div className="scale-125">
+                    <UserButton afterSignOutUrl="/" />
+                </div>
             </div>
         );
     }
@@ -87,20 +89,20 @@ export default function ProfilePage() {
                                         autoFocus
                                         value={newName}
                                         onChange={(e) => setNewName(e.target.value)}
-                                        className="bg-primary/5 border-b-2 border-primary outline-none text-xl font-bold py-1 w-full"
+                                        className="bg-primary/5 border-b-2 border-primary outline-none text-xl font-bold py-1 w-full text-foreground"
                                         disabled={isSaving}
                                     />
                                     <button
                                         onClick={handleSaveName}
                                         disabled={isSaving}
-                                        className="p-1 text-green-600 hover:bg-green-50 rounded-md"
+                                        className="p-1 text-green-600 hover:bg-green-50 dark:hover:bg-green-950/30 rounded-md"
                                     >
                                         <Check size={20} />
                                     </button>
                                     <button
                                         onClick={() => setIsEditing(false)}
                                         disabled={isSaving}
-                                        className="p-1 text-red-600 hover:bg-red-50 rounded-md"
+                                        className="p-1 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-md"
                                     >
                                         <X size={20} />
                                     </button>
@@ -164,14 +166,9 @@ export default function ProfilePage() {
 
                 <GalleryGrid
                     posts={userPosts}
-                    onSelectPost={setSelectedPost}
                 />
             </div>
-
-            <MediaModal
-                post={selectedPost}
-                onClose={() => setSelectedPost(null)}
-            />
         </div>
     );
 }
+

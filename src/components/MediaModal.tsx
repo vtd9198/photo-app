@@ -50,7 +50,7 @@ export default function MediaModal({
 
                 {/* Media Content - Swipe to close */}
                 <motion.div
-                    className="flex-1 flex items-center justify-center p-2 mt-4"
+                    className="flex-1 flex items-center justify-center p-2 mt-4 relative"
                     drag="y"
                     dragConstraints={{ top: 0, bottom: 0 }}
                     onDragEnd={(e, info) => {
@@ -66,14 +66,19 @@ export default function MediaModal({
                             playsInline
                         />
                     ) : (
-                        <motion.img
+                        <motion.div
                             layoutId={`media-${post._id}`}
-                            src={post.mediaUrl || ""}
-                            alt={post.caption || "Full screen memory"}
-                            className="max-h-full max-w-full rounded-2xl shadow-2xl object-contain"
-                        />
+                            className="w-full h-full flex items-center justify-center"
+                        >
+                            <img
+                                src={post.mediaUrl || ""}
+                                alt={post.caption || "Full screen memory"}
+                                className="max-h-full max-w-full rounded-2xl shadow-2xl object-contain"
+                            />
+                        </motion.div>
                     )}
                 </motion.div>
+
 
                 {/* Bottom Details */}
                 <div className="p-6 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] text-white">

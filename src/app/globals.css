@@ -9,31 +9,29 @@
 }
 
 :root {
-  --background: #fafafa;
-  --foreground: #171717;
+  --background: #F5F5DC;
+  --foreground: #3E2723;
 
-  /* Easily swap these hex codes for the party's aesthetic */
-  --primary: #f472b6;
-  /* Pink-400 */
-  --secondary: #fb7185;
-  /* Rose-400 */
-  --accent: #fbcfe8;
-  /* Pink-200 */
+  /* Beige & White Theme */
+  --primary: #D2B48C;
+  /* Tan */
+  --secondary: #C19A6B;
+  /* Fallow */
+  --accent: #FFFDD0;
+  /* Cream */
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #1A1A1A;
+    --foreground: #F5F5DC;
 
-    --primary: #db2777;
-    /* Pink-600 */
-    --secondary: #e11d48;
-    /* Rose-600 */
-    --accent: #831843;
-    /* Pink-900 */
+    --primary: #D2B48C;
+    --secondary: #C19A6B;
+    --accent: #3E2723;
   }
 }
+
 
 @theme inline {
   --color-background: var(--background);
