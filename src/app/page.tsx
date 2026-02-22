@@ -1,10 +1,10 @@
 "use client";
 
-import { motion, useMotionValue, useTransform, AnimatePresence } from "framer-motion";
+import { motion, useMotionValue, AnimatePresence } from "framer-motion";
 import { SignInButton, SignedIn, SignedOut, useUser } from "@clerk/nextjs";
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
-import { ChevronRight, Calendar, MapPin, Clock, Sparkles } from "lucide-react";
+import { ChevronRight, MapPin, Clock } from "lucide-react";
 import confetti from "canvas-confetti";
 
 // Custom Disco Ball Component
@@ -38,7 +38,7 @@ const DiscoBall = () => (
         {[...Array(6)].map((_, i) => (
             <motion.div
                 key={i}
-                className="absolute w-1 h-1 bg-white rounded-full group-hover:scale-150"
+                className="absolute w-1 h-1 bg-white rounded-full"
                 style={{
                     top: `${20 + Math.random() * 60}%`,
                     left: `${20 + Math.random() * 60}%`,
@@ -58,9 +58,41 @@ const DiscoBall = () => (
     </motion.div>
 );
 
+const translations = {
+    pl: {
+        envelopeLabel: "Urodziny Ali",
+        clickToOpen: "Kliknij, aby otworzyć",
+        celebrating: "Świętujemy",
+        birthday: "18. URODZINY ALI",
+        when: "Kiedy",
+        where: "Gdzie",
+        dressCodeLabel: "Dress Code",
+        dressCodeValue: "Elegancko i Świątecznie",
+        enterParty: "WEJDŹ NA IMPREZĘ",
+        returnEnvelope: "Wróć do koperty",
+        location: "Grand Ballroom",
+        time: "20.03.2026 | 18:00",
+    },
+    vi: {
+        envelopeLabel: "Sinh nhật của Ala",
+        clickToOpen: "Nhấn để mở",
+        celebrating: "Chào mừng",
+        birthday: "SINH NHẬT LẦN THỨ 18 CỦA ALA",
+        when: "Thời gian",
+        where: "Địa điểm",
+        dressCodeLabel: "Trang phục",
+        dressCodeValue: "Sang trọng & Lễ hội",
+        enterParty: "VÀO BUỔI TIỆC",
+        returnEnvelope: "Quay lại phong bì",
+        location: "Grand Ballroom",
+        time: "20.03.2026 | 18:00",
+    }
+};
+
 export default function InvitationPage() {
     const { isLoaded } = useUser();
     const [isOpen, setIsOpen] = useState(false);
+    const [lang, setLang] = useState<"pl" | "vi">("pl");
     const [timeLeft, setTimeLeft] = useState<{
         days: number;
         hours: number;
@@ -68,7 +100,17 @@ export default function InvitationPage() {
         seconds: number;
     }>({ days: 0, hours: 0, minutes: 0, seconds: 0 });
 
-    const [showCalendarHints, setShowCalendarHints] = useState(false);
+    // Detect language
+    useEffect(() => {
+        const browserLang = navigator.language.toLowerCase();
+        if (browserLang.includes("vi")) {
+            setLang("vi");
+        } else {
+            setLang("pl");
+        }
+    }, []);
+
+    const t = translations[lang];
 
     // March 20, 2026 at 18:00 (6 PM) Poland time (CET -> UTC+1)
     const eventDate = new Date("2026-03-20T18:00:00+01:00").getTime();
@@ -103,11 +145,6 @@ export default function InvitationPage() {
         });
     };
 
-    const handleCalendarClick = () => {
-        const googleCalendarUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=Ala%27s+18th+Birthday&dates=20260320T170000Z/20260321T020000Z&details=Party+Time!+A+night+of+memories,+friends,+and+celebration.&location=The+Grand+Ballroom,+Poland`;
-        window.open(googleCalendarUrl, "_blank");
-    };
-
     // Magnetic Button Logic
     const buttonRef = useRef<HTMLDivElement>(null);
     const x = useMotionValue(0);
@@ -128,8 +165,6 @@ export default function InvitationPage() {
 
     return (
         <div className="relative h-[100dvh] w-full overflow-hidden bg-[#FDFBF7] flex flex-col items-center justify-center text-[#3E2723]">
-            {/* Decorative Grain Overlay handled in layout.tsx */}
-
             <AnimatePresence mode="wait">
                 {!isOpen ? (
                     <motion.div
@@ -158,7 +193,7 @@ export default function InvitationPage() {
                                 </div>
 
                                 <div className="absolute bottom-6 w-full text-center">
-                                    <p className="text-[#FDFBF7]/60 text-[10px] uppercase tracking-[0.4em] font-medium">Ala's 18th Birthday</p>
+                                    <p className="text-[#FDFBF7]/60 text-[10px] uppercase tracking-[0.4em] font-medium">{t.envelopeLabel}</p>
                                 </div>
                             </motion.div>
 
@@ -175,7 +210,7 @@ export default function InvitationPage() {
                             transition={{ repeat: Infinity, duration: 2 }}
                             className="flex flex-col items-center gap-1"
                         >
-                            <span className="text-xs tracking-[0.3em] uppercase font-bold text-[#A62639]">Click to Open</span>
+                            <span className="text-xs tracking-[0.3em] uppercase font-bold text-[#A62639]">{t.clickToOpen}</span>
                             <div className="w-1 h-1 bg-[#A62639] rounded-full" />
                         </motion.div>
                     </motion.div>
@@ -195,16 +230,6 @@ export default function InvitationPage() {
                             }}
                         >
                             <div className="bg-[#FDFBF7] w-full h-full flex flex-col items-center py-12 px-6 overflow-hidden">
-                                {/* Graphics */}
-                                <div className="flex justify-between w-full absolute top-8 px-8 opacity-20 pointer-events-none">
-                                    <motion.div animate={{ rotate: [0, 10, -10, 0] }} transition={{ repeat: Infinity, duration: 4 }}>
-                                        <Sparkles size={24} className="text-[#A62639]" />
-                                    </motion.div>
-                                    <motion.div animate={{ rotate: [0, -10, 10, 0] }} transition={{ repeat: Infinity, duration: 5 }}>
-                                        <Sparkles size={24} className="text-[#A62639]" />
-                                    </motion.div>
-                                </div>
-
                                 <DiscoBall />
 
                                 <motion.h2
@@ -227,21 +252,21 @@ export default function InvitationPage() {
                                 <div className="w-12 h-[2px] bg-[#A62639]/20 mb-6" />
 
                                 <div className="text-center space-y-4 mb-8">
-                                    <p className="text-[10px] uppercase tracking-[0.5em] font-black text-[#A62639]/40">Celebrating</p>
-                                    <h1 className="font-serif text-2xl text-[#2C1810] font-bold">ALA'S 18TH BIRTHDAY</h1>
+                                    <p className="text-[10px] uppercase tracking-[0.5em] font-black text-[#A62639]/40">{t.celebrating}</p>
+                                    <h1 className="font-serif text-2xl text-[#2C1810] font-bold">{t.birthday}</h1>
                                 </div>
 
                                 {/* Event Details Grid */}
                                 <div className="grid grid-cols-2 gap-6 w-full mb-8 border-y border-[#A62639]/10 py-6">
                                     <div className="flex flex-col items-center gap-1 border-r border-[#A62639]/10">
                                         <Clock size={16} className="text-[#A62639]/60 mb-1" />
-                                        <span className="text-[9px] uppercase tracking-widest text-[#A62639] font-bold">When</span>
-                                        <p className="text-xs font-bold text-[#3E2723]">20.03.2026 | 6 PM</p>
+                                        <span className="text-[9px] uppercase tracking-widest text-[#A62639] font-bold">{t.when}</span>
+                                        <p className="text-xs font-bold text-[#3E2723]">{t.time}</p>
                                     </div>
                                     <div className="flex flex-col items-center gap-1">
                                         <MapPin size={16} className="text-[#A62639]/60 mb-1" />
-                                        <span className="text-[9px] uppercase tracking-widest text-[#A62639] font-bold">Where</span>
-                                        <p className="text-xs font-bold text-[#3E2723]">Grand Ballroom</p>
+                                        <span className="text-[9px] uppercase tracking-widest text-[#A62639] font-bold">{t.where}</span>
+                                        <p className="text-xs font-bold text-[#3E2723]">{t.location}</p>
                                     </div>
                                 </div>
 
@@ -251,12 +276,12 @@ export default function InvitationPage() {
                                     transition={{ delay: 0.8 }}
                                     className="flex flex-col items-center gap-1 mb-8"
                                 >
-                                    <span className="text-[9px] uppercase tracking-widest text-[#A62639]/60 font-bold">Dress Code</span>
-                                    <p className="text-xs font-bold text-[#3E2723] uppercase tracking-widest">Glamorous & Festive</p>
+                                    <span className="text-[9px] uppercase tracking-widest text-[#A62639]/60 font-bold">{t.dressCodeLabel}</span>
+                                    <p className="text-xs font-bold text-[#3E2723] uppercase tracking-widest">{t.dressCodeValue}</p>
                                 </motion.div>
 
-                                <div className="mb-8 w-full">
-                                    <div className="flex justify-center items-end gap-4 mb-4">
+                                <div className="mb-14 w-full">
+                                    <div className="flex justify-center items-end gap-4">
                                         {[
                                             { label: "D", value: timeLeft.days },
                                             { label: "H", value: timeLeft.hours },
@@ -273,14 +298,6 @@ export default function InvitationPage() {
                                             </div>
                                         ))}
                                     </div>
-                                    <button
-                                        onClick={handleCalendarClick}
-                                        onMouseEnter={() => setShowCalendarHints(true)}
-                                        onMouseLeave={() => setShowCalendarHints(false)}
-                                        className="w-full py-2 rounded-full border border-[#A62639]/20 text-[9px] uppercase tracking-[0.3em] font-bold text-[#A62639] hover:bg-[#A62639] hover:text-[#FDFBF7] transition-all"
-                                    >
-                                        {showCalendarHints ? "Adding to Calendar..." : "Add to Calendar"}
-                                    </button>
                                 </div>
 
                                 {/* Magnetic Entry Button */}
@@ -302,7 +319,7 @@ export default function InvitationPage() {
                                                         whileTap={{ scale: 0.98 }}
                                                         className="w-full flex items-center justify-center gap-2 bg-[#A62639] text-[#FDFBF7] h-14 rounded-full font-serif text-lg tracking-widest shadow-xl shadow-[#A62639]/20 transition-transform active:scale-95"
                                                     >
-                                                        ENTER PARTY
+                                                        {t.enterParty}
                                                         <ChevronRight size={20} />
                                                     </motion.button>
                                                 </SignInButton>
@@ -315,7 +332,7 @@ export default function InvitationPage() {
                                                         whileTap={{ scale: 0.98 }}
                                                         className="w-full flex items-center justify-center gap-2 bg-[#A62639] text-[#FDFBF7] h-14 rounded-full font-serif text-lg tracking-widest shadow-xl shadow-[#A62639]/20 transition-transform active:scale-95"
                                                     >
-                                                        ENTER PARTY
+                                                        {t.enterParty}
                                                         <ChevronRight size={20} />
                                                     </motion.button>
                                                 </Link>
@@ -357,26 +374,18 @@ export default function InvitationPage() {
                                             <line x1="20" y1="70" x2="40" y2="70" stroke="#A62639" strokeWidth="1.5" />
                                             <path d="M15 15 L45 15 Q45 35 30 35 Q15 35 15 15" fill="#A62639" opacity="0.3" />
                                         </motion.svg>
-
-                                        {/* Sparkles between glasses */}
-                                        <motion.div
-                                            className="absolute top-2"
-                                            animate={{ scale: [0.8, 1.2, 0.8], opacity: [0.5, 1, 0.5] }}
-                                            transition={{ repeat: Infinity, duration: 1.5 }}
-                                        >
-                                            <Sparkles size={16} className="text-[#A62639]/40" />
-                                        </motion.div>
                                     </div>
                                 </motion.div>
                             </div>
                         </div>
+
                         <motion.button
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             className="mt-8 text-[10px] uppercase tracking-[0.4em] font-black text-[#A62639]/50 hover:text-[#A62639] transition-colors"
                             onClick={() => setIsOpen(false)}
                         >
-                            Return to Envelope
+                            {t.returnEnvelope}
                         </motion.button>
                     </motion.div>
                 )}
