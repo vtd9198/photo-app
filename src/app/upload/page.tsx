@@ -75,6 +75,7 @@ export default function UploadPage() {
             const mediaType = file.type.startsWith("video/") ? "video" : "image";
             await sendPost({
                 storageId,
+                authorName: user.fullName || user.username || "Party Guest",
                 caption: caption,
                 mediaType,
             });
@@ -87,9 +88,9 @@ export default function UploadPage() {
             setTimeout(() => {
                 router.refresh();
             }, 500);
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error("❌ Upload Error Details:", err);
-            setError(err.message || "An error occurred during upload.");
+            setError(err instanceof Error ? err.message : "An error occurred during upload.");
         } finally {
             setIsUploading(false);
         }
