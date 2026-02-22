@@ -8,9 +8,8 @@ const isProtectedRoute = createRouteMatcher([
 export default clerkMiddleware(async (auth, req) => {
     if (isProtectedRoute(req)) {
         // Lock the feed until March 20, 2026, 6 PM Poland time (CET/CEST)
-        // Since Poland is UTC+1 (or +2 in summer), 18:00 Poland time is 17:00 UTC (roughly)
-        // Fixed timestamp for 2026-03-20T18:00:00+01:00
-        const eventDate = new Date("2026-03-20T18:00:00+01:00").getTime();
+        // TO RELOCK: Set year back to 2026
+        const eventDate = new Date("2024-03-20T18:00:00+01:00").getTime();
         const now = Date.now();
 
         if (now < eventDate) {

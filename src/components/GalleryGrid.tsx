@@ -47,10 +47,12 @@ const itemVariants = {
 };
 
 export default function GalleryGrid({
+    posts: initialPosts,
     sortBy = "newest",
     searchTerm = "",
     onPostClick
 }: {
+    posts?: Post[];
     sortBy?: "newest" | "mostLiked";
     searchTerm?: string;
     onPostClick?: (post: Post) => void;
@@ -58,7 +60,7 @@ export default function GalleryGrid({
     const fetchedPosts = useQuery(api.posts.listPosts, { sortBy, searchTerm }) as Post[] | undefined;
     const toggleLike = useMutation(api.posts.toggleLike);
     const deletePost = useMutation(api.posts.deletePost);
-    const posts = fetchedPosts;
+    const posts = initialPosts !== undefined ? initialPosts : fetchedPosts;
 
     if (posts === undefined) {
         return (

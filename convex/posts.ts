@@ -213,3 +213,44 @@ export const toggleLike = mutation({
         }
     },
 });
+
+export const deletePost = mutation({
+    args: {
+        postId: v.id("posts"),
+    },
+    handler: async (ctx, args) => {
+        const identity = await ctx.auth.getUserIdentity();
+        if (!identity) {
+            throw new Error("Unauthorized");
+        }
+
+        const user = await ctx.db
+            .query("users")
+            .withIndex("by_externalId", (q) => q.eq("externalId", identity.subject))
+            .unique();
+
+        if (!user) {
+            throw new Error("User not found");
+        }
+
+        const post = await ctx.db.get(args.postId);
+        if (!post) {
+            throw new Error("Post not found");
+        }
+
+        if (post.userId !== user._id) {
+            throw new Error("Unauthorized: Only the author can delete this post");
+        }
+
+        await ctx.db.delete(args.postId);
+        // Also delete associated likes
+        const likes = await ctx.db
+            .query("likes")
+            .withIndex("by_postId", (q) => q.eq("postId", args.postId))
+            .collect();
+
+        for (const like of likes) {
+            await ctx.db.delete(like._id);
+        }
+    },
+});
