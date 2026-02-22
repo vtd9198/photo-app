@@ -10,17 +10,26 @@ import { cn } from "@/lib/utils";
 export default function Home() {
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [sortBy, setSortBy] = useState<"newest" | "mostLiked">("newest");
+  const [searchTerm, setSearchTerm] = useState("");
 
   return (
     <div className="pt-24">
       <header className="fixed top-0 left-0 right-0 z-40 bg-background/80 backdrop-blur-xl border-b border-primary/10">
-        <div className="max-w-md mx-auto px-6 h-20 flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-serif font-bold tracking-tight text-foreground leading-tight">Party Feed</h1>
-            <p className="text-[10px] uppercase tracking-widest font-bold text-foreground/40">Memories 🥂</p>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="bg-white/50 dark:bg-neutral-900/50 p-1 rounded-full shadow-sm hover:scale-105 transition-transform border border-primary/10">
+        <div className="max-w-md mx-auto px-6 h-20 flex justify-between items-center gap-4">
+          <h1 className="font-playfair font-bold text-lg text-primary shrink-0">
+            Ala&apos;s 18th Birthday
+          </h1>
+          <div className="flex items-center gap-4 flex-1 justify-end min-w-0">
+            <div className="relative max-w-[150px] w-full">
+              <input
+                type="text"
+                placeholder="Search..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full bg-accent/50 border border-primary/10 rounded-full px-4 py-1.5 text-[10px] focus:outline-none focus:ring-1 focus:ring-primary/30 transition-all placeholder:text-foreground/30"
+              />
+            </div>
+            <div className="bg-white/50 dark:bg-neutral-900/50 p-1 rounded-full shadow-sm hover:scale-105 transition-transform border border-primary/10 flex-shrink-0">
               <UserButton afterSignOutUrl="/" />
             </div>
           </div>
@@ -55,7 +64,9 @@ export default function Home() {
         </div>
       </div>
 
-      <GalleryGrid sortBy={sortBy} />
+      <GalleryGrid sortBy={sortBy} searchTerm={searchTerm} onPostClick={setSelectedPost} />
+
+      <MediaModal post={selectedPost} onClose={() => setSelectedPost(null)} />
     </div>
   );
 }

@@ -11,6 +11,8 @@ export const sendPost = mutation({
         caption: v.optional(v.string()),
         mediaType: v.union(v.literal("image"), v.literal("video")),
         authorName: v.string(),
+        width: v.optional(v.number()),
+        height: v.optional(v.number()),
     },
     handler: async (ctx, args) => {
         const identity = await ctx.auth.getUserIdentity();
@@ -27,12 +29,22 @@ export const sendPost = mutation({
             throw new Error("User not found");
         }
 
+        console.log("Saving post:", {
+            storageId: args.storageId,
+            authorName: args.authorName,
+            mediaType: args.mediaType,
+            width: args.width,
+            height: args.height,
+        });
+
         await ctx.db.insert("posts", {
             storageId: args.storageId,
             userId: user._id,
             authorName: args.authorName,
             caption: args.caption,
             mediaType: args.mediaType,
+            width: args.width,
+            height: args.height,
             createdAt: Date.now(),
         });
     },
@@ -42,6 +54,7 @@ export const sendPost = mutation({
 export const listPosts = query({
     args: {
         sortBy: v.optional(v.union(v.literal("newest"), v.literal("mostLiked"))),
+        searchTerm: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
         const identity = await ctx.auth.getUserIdentity();
@@ -52,7 +65,14 @@ export const listPosts = query({
                 .unique()
             : null;
 
-        const posts = await ctx.db.query("posts").order("desc").collect();
+        let posts = await ctx.db.query("posts").order("desc").collect();
+
+        if (args.searchTerm && args.searchTerm.trim() !== "") {
+            const searchLower = args.searchTerm.toLowerCase().trim();
+            posts = posts.filter(post =>
+                post.authorName.toLowerCase().includes(searchLower)
+            );
+        }
 
         const postsWithDetails = await Promise.all(
             posts.map(async (post) => {
@@ -67,7 +87,7 @@ export const listPosts = query({
 
                 return {
                     ...post,
-                    mediaUrl: await ctx.storage.getUrl(post.storageId),
+                    mediaUrl: `${process.env.CONVEX_SITE_URL}/getMedia?storageId=${post.storageId}`,
                     likeCount: likes.length,
                     isLikedByMe,
                 };
@@ -111,7 +131,7 @@ export const listUserPosts = query({
 
                 return {
                     ...post,
-                    mediaUrl: await ctx.storage.getUrl(post.storageId),
+                    mediaUrl: `${process.env.CONVEX_SITE_URL}/getMedia?storageId=${post.storageId}`,
                     likeCount: likes.length,
                     isLikedByMe,
                 };

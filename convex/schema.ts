@@ -13,6 +13,8 @@ export default defineSchema({
         authorName: v.string(),
         caption: v.optional(v.string()),
         mediaType: v.union(v.literal("image"), v.literal("video")),
+        width: v.optional(v.number()),
+        height: v.optional(v.number()),
         createdAt: v.number(), // timestamp
     }).index("by_userId", ["userId"]),
 
