@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Image as ImageIcon, Plus, User } from "lucide-react";
 import { motion } from "framer-motion";
+import { useUploadDrawer } from "@/providers/UploadDrawerProvider";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
@@ -13,6 +14,7 @@ function cn(...inputs: ClassValue[]) {
 
 export default function BottomNav() {
     const pathname = usePathname();
+    const { openDrawer } = useUploadDrawer();
 
     // Hide nav on passcode screen
     if (pathname === "/passcode") return null;
@@ -24,15 +26,14 @@ export default function BottomNav() {
 
                 {/* Upload FAB trigger */}
                 <div className="relative -top-5">
-                    <Link href="/upload">
-                        <motion.div
-                            whileHover={{ scale: 1.05 }}
-                            whileTap={{ scale: 0.95 }}
-                            className="bg-primary text-white p-4 rounded-full shadow-xl shadow-primary/30 flex items-center justify-center border-4 border-background"
-                        >
-                            <Plus size={28} strokeWidth={2.5} />
-                        </motion.div>
-                    </Link>
+                    <motion.button
+                        onClick={openDrawer}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        className="bg-primary text-white p-4 rounded-full shadow-xl shadow-primary/30 flex items-center justify-center border-4 border-background"
+                    >
+                        <Plus size={28} strokeWidth={2.5} />
+                    </motion.button>
                 </div>
 
                 <NavItem href="/profile" icon={<User size={24} />} isActive={pathname === "/profile"} label="Profile" />
