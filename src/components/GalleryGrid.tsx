@@ -14,8 +14,9 @@ export type Post = {
     createdAt: number;
 };
 
-export default function GalleryGrid({ onSelectPost }: { onSelectPost: (post: any) => void }) {
-    const posts = useQuery(api.posts.listPosts);
+export default function GalleryGrid({ onSelectPost, posts: initialPosts }: { onSelectPost: (post: Post) => void, posts?: Post[] }) {
+    const fetchedPosts = useQuery(api.posts.listPosts);
+    const posts = initialPosts !== undefined ? initialPosts : fetchedPosts;
 
     if (posts === undefined) {
         return (

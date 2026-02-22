@@ -87,9 +87,9 @@ export default function UploadPage() {
             setTimeout(() => {
                 router.refresh();
             }, 500);
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error("❌ Upload Error Details:", err);
-            setError(err.message || "An error occurred during upload.");
+            setError(err instanceof Error ? err.message : "An error occurred during upload.");
         } finally {
             setIsUploading(false);
         }

@@ -9,11 +9,12 @@ export default defineSchema({
     }).index("by_externalId", ["externalId"]),
     posts: defineTable({
         storageId: v.id("_storage"),
+        userId: v.id("users"),
         authorName: v.string(),
         caption: v.optional(v.string()),
         mediaType: v.union(v.literal("image"), v.literal("video")),
         createdAt: v.number(), // timestamp
-    }),
+    }).index("by_userId", ["userId"]),
     likes: defineTable({
         userId: v.id("users"),
         postId: v.id("posts"),

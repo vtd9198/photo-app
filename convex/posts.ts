@@ -8,14 +8,31 @@ export const generateUploadUrl = mutation(async (ctx) => {
 export const sendPost = mutation({
     args: {
         storageId: v.id("_storage"),
-        authorName: v.string(),
+        authorName: v.optional(v.string()),
         caption: v.optional(v.string()),
         mediaType: v.union(v.literal("image"), v.literal("video")),
     },
     handler: async (ctx, args) => {
+        const identity = await ctx.auth.getUserIdentity();
+        if (!identity) {
+            throw new Error("Unauthorized");
+        }
+
+        const user = await ctx.db
+            .query("users")
+            .withIndex("by_externalId", (q) => q.eq("externalId", identity.subject))
+            .unique();
+
+        if (!user) {
+            throw new Error("User not found");
+        }
+
         await ctx.db.insert("posts", {
-            ...args,
-            authorName: args.authorName || "Party Guest",
+            storageId: args.storageId,
+            userId: user._id,
+            authorName: user.name || args.authorName || "Party Guest",
+            caption: args.caption,
+            mediaType: args.mediaType,
             createdAt: Date.now(),
         });
     },
@@ -52,6 +69,80 @@ export const listPosts = query({
                 };
             })
         );
+    },
+});
+
+export const listUserPosts = query({
+    handler: async (ctx) => {
+        const identity = await ctx.auth.getUserIdentity();
+        if (!identity) return [];
+
+        const user = await ctx.db
+            .query("users")
+            .withIndex("by_externalId", (q) => q.eq("externalId", identity.subject))
+            .unique();
+
+        if (!user) return [];
+
+        const posts = await ctx.db
+            .query("posts")
+            .withIndex("by_userId", (q) => q.eq("userId", user._id))
+            .order("desc")
+            .collect();
+
+        return Promise.all(
+            posts.map(async (post) => {
+                const likes = await ctx.db
+                    .query("likes")
+                    .withIndex("by_postId", (q) => q.eq("postId", post._id))
+                    .collect();
+
+                const isLikedByMe = likes.some((like) => like.userId === user._id);
+
+                return {
+                    ...post,
+                    mediaUrl: await ctx.storage.getUrl(post.storageId),
+                    likeCount: likes.length,
+                    isLikedByMe,
+                };
+            })
+        );
+    },
+});
+
+export const getUserStats = query({
+    handler: async (ctx) => {
+        const identity = await ctx.auth.getUserIdentity();
+        if (!identity) return null;
+
+        const user = await ctx.db
+            .query("users")
+            .withIndex("by_externalId", (q) => q.eq("externalId", identity.subject))
+            .unique();
+
+        if (!user) return null;
+
+        const userPosts = await ctx.db
+            .query("posts")
+            .withIndex("by_userId", (q) => q.eq("userId", user._id))
+            .collect();
+
+        const postLikeCounts = await Promise.all(
+            userPosts.map(async (post) => {
+                const likes = await ctx.db
+                    .query("likes")
+                    .withIndex("by_postId", (q) => q.eq("postId", post._id))
+                    .collect();
+                return likes.length;
+            })
+        );
+
+        const totalLikesReceived = postLikeCounts.reduce((sum, count) => sum + count, 0);
+
+        return {
+            totalLikesReceived,
+            postCount: userPosts.length,
+        };
     },
 });
 
