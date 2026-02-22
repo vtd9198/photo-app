@@ -19,7 +19,6 @@ http.route({
         }
 
         const metadata = await ctx.storage.getMetadata(storageId as any);
-
         return new Response(blob, {
             headers: {
                 "Content-Type": metadata?.contentType ?? "application/octet-stream",

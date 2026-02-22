@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { Play, Heart, Trash2 } from "lucide-react";
+import { Play, Heart, Trash2, AlertCircle } from "lucide-react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import Image from "next/image";
@@ -107,51 +107,81 @@ export default function GalleryGrid({
             variants={containerVariants}
             initial="hidden"
             animate="visible"
-            className="columns-2 md:columns-3 gap-4 px-6 pb-6 space-y-4"
+            className="flex flex-col gap-8 px-4 pb-20 max-w-2xl mx-auto"
         >
             {posts.map((post, index) => (
                 <motion.div
                     key={post._id}
                     layout
                     variants={itemVariants}
-                    className="relative rounded-2xl overflow-hidden shadow-sm bg-neutral-100 dark:bg-neutral-800 break-inside-avoid flex flex-col cursor-pointer"
+                    className="relative rounded-3xl overflow-hidden flex flex-col group cursor-zoom-in"
                     onClick={() => onPostClick?.(post)}
                 >
-                    <div className="relative group overflow-hidden">
+                    <div className="relative overflow-hidden">
                         {post.mediaType === 'video' ? (
-                            <div className={cn("relative w-full", getAspectRatioClass(post._id, post.width, post.height))}>
+                            <div
+                                className="relative w-full flex items-center justify-center overflow-hidden"
+                                style={{
+                                    aspectRatio: post.width && post.height ? `${post.width} / ${post.height}` : undefined,
+                                    maxHeight: '80vh',
+                                }}
+                            >
                                 <video
                                     src={post.mediaUrl || ""}
-                                    className="absolute inset-0 w-full h-full object-cover"
+                                    className="w-full h-full object-contain shadow-2xl"
+                                    autoPlay
                                     muted
+                                    loop
                                     playsInline
-                                    preload="metadata"
+                                    preload="auto"
                                 />
-                                <div className="absolute top-3 right-3 bg-black/40 backdrop-blur-md p-1.5 rounded-full z-10">
-                                    <Play size={14} className="text-white ml-0.5" />
+                                <div className="absolute top-4 right-4 bg-black/40 backdrop-blur-md p-2 rounded-full z-10 text-white">
+                                    <Play size={18} className="ml-0.5 fill-current" />
                                 </div>
                             </div>
                         ) : (
-                            <div className={cn(
-                                "relative w-full overflow-hidden",
-                                getAspectRatioClass(post._id, post.width, post.height)
-                            )}>
-                                <Image
-                                    src={post.mediaUrl || ""}
-                                    alt={post.caption || "Party memory"}
-                                    fill
-                                    sizes="(max-width: 768px) 50vw, 33vw"
-                                    className="object-cover transition-transform duration-700 group-hover:scale-105"
-                                    placeholder="blur"
-                                    blurDataURL={BEIGE_BLUR_DATA_URL}
-                                    priority={index < 4}
-                                />
+                            <div
+                                className="relative w-full flex items-center justify-center overflow-hidden"
+                                style={{
+                                    aspectRatio: post.width && post.height ? `${post.width} / ${post.height}` : undefined,
+                                    maxHeight: '85vh',
+                                }}
+                            >
+                                {post.mediaUrl ? (
+                                    <img
+                                        src={post.mediaUrl}
+                                        alt={post.caption || "Party memory"}
+                                        className="max-h-full max-w-full w-auto h-auto object-contain transition-transform duration-700 group-hover:scale-[1.01] shadow-2xl"
+                                        loading="lazy"
+                                        onLoad={(e) => {
+                                            const img = e.currentTarget;
+                                            if (img.naturalWidth && img.naturalHeight && (!post.width || !post.height)) {
+                                                console.log("Measured dimensions:", img.naturalWidth, img.naturalHeight);
+                                            }
+                                        }}
+                                        onError={(e) => {
+                                            console.error("Image failed to load:", post.mediaUrl);
+                                            e.currentTarget.style.display = 'none';
+                                            const fallback = e.currentTarget.parentElement?.querySelector('.image-fallback');
+                                            if (fallback) (fallback as HTMLElement).style.display = 'flex';
+                                        }}
+                                    />
+                                ) : (
+                                    <div className="flex flex-col items-center justify-center p-20 text-foreground/20">
+                                        <AlertCircle size={48} />
+                                        <p className="mt-2 text-sm font-medium">Image unavailable</p>
+                                    </div>
+                                )}
+                                <div className="image-fallback hidden absolute inset-0 flex-col items-center justify-center p-20 text-foreground/20">
+                                    <AlertCircle size={48} />
+                                    <p className="mt-2 text-sm font-medium">Failed to load memory</p>
+                                </div>
                             </div>
                         )}
 
-                        {/* Overlay author on hover or fixed top */}
-                        <div className="absolute top-3 left-3 bg-black/40 backdrop-blur-md px-2 py-1 rounded-lg">
-                            <p className="text-white text-[9px] font-bold uppercase tracking-wider">
+                        {/* Author Badge */}
+                        <div className="absolute top-4 left-4 bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10">
+                            <p className="text-white text-[10px] font-bold uppercase tracking-wider">
                                 {post.authorName}
                             </p>
                         </div>
