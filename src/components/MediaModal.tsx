@@ -50,7 +50,7 @@ export default function MediaModal({
 
                 {/* Media Content - Swipe to close */}
                 <motion.div
-                    className="flex-1 flex items-center justify-center p-4 relative"
+                    className="flex-1 flex items-center justify-center p-2 mt-4 relative"
                     drag="y"
                     dragConstraints={{ top: 0, bottom: 0 }}
                     onDragEnd={(e, info) => {
@@ -60,8 +60,7 @@ export default function MediaModal({
                     {post.mediaType === 'video' ? (
                         <video
                             src={post.mediaUrl || ""}
-                            className="max-h-[85vh] max-w-full rounded-xl shadow-2xl bg-black"
-                            style={{ aspectRatio: post.width && post.height ? `${post.width} / ${post.height}` : undefined }}
+                            className="max-h-full max-w-full rounded-2xl shadow-2xl"
                             controls
                             autoPlay
                             playsInline
@@ -74,11 +73,7 @@ export default function MediaModal({
                             <img
                                 src={post.mediaUrl || ""}
                                 alt={post.caption || "Full screen memory"}
-                                className="max-h-[85vh] max-w-full rounded-xl shadow-2xl object-contain"
-                                style={{ aspectRatio: post.width && post.height ? `${post.width} / ${post.height}` : undefined }}
-                                onError={(e) => {
-                                    console.error("Modal image failed to load:", post.mediaUrl);
-                                }}
+                                className="max-h-full max-w-full rounded-2xl shadow-2xl object-contain"
                             />
                         </motion.div>
                     )}

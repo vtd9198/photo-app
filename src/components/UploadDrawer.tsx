@@ -7,7 +7,7 @@ import { useUploadDrawer } from "@/providers/UploadDrawerProvider";
 import { useUser, SignInButton, SignedIn, SignedOut } from "@clerk/nextjs";
 import { useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import imageCompression from "browser-image-compression";
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 import { fetchFile, toBlobURL } from "@ffmpeg/util";
@@ -17,6 +17,9 @@ export default function UploadDrawer() {
     const { isOpen, closeDrawer } = useUploadDrawer();
     const { user } = useUser();
     const router = useRouter();
+    const pathname = usePathname();
+
+    if (pathname === "/" || pathname === "/passcode") return null;
 
     const [file, setFile] = useState<File | null>(null);
     const [previewURL, setPreviewURL] = useState<string | null>(null);
@@ -140,26 +143,6 @@ export default function UploadDrawer() {
         try {
             let processedFile = file;
 
-            const getDimensions = (): Promise<{ width?: number; height?: number }> => {
-                return new Promise((resolve) => {
-                    if (file.type.startsWith("image/")) {
-                        const img = new Image();
-                        img.onload = () => resolve({ width: img.width, height: img.height });
-                        img.onerror = () => resolve({});
-                        img.src = URL.createObjectURL(file);
-                    } else if (file.type.startsWith("video/")) {
-                        const video = document.createElement("video");
-                        video.onloadedmetadata = () => resolve({ width: video.videoWidth, height: video.videoHeight });
-                        video.onerror = () => resolve({});
-                        video.src = URL.createObjectURL(file);
-                    } else {
-                        resolve({});
-                    }
-                });
-            };
-
-            const dimensions = await getDimensions();
-
             if (file.type.startsWith("image/")) {
                 processedFile = await compressImage(file);
             } else if (file.type.startsWith("video/")) {
@@ -192,8 +175,6 @@ export default function UploadDrawer() {
                 caption: caption,
                 mediaType,
                 authorName: user.fullName || user.username || "Party Guest",
-                width: dimensions.width,
-                height: dimensions.height,
             });
 
 
@@ -214,9 +195,7 @@ export default function UploadDrawer() {
                 closeDrawer();
                 router.push("/");
                 router.refresh();
-                // If it still doesn't show, force a reload as a fallback
-                // window.location.reload(); 
-            }, 2000);
+            }, 3000);
 
         } catch (err) {
             console.error("Upload Error:", err);
@@ -280,11 +259,11 @@ export default function UploadDrawer() {
                                     animate={{ opacity: 1, y: 0 }}
                                     className="space-y-6"
                                 >
-                                    <div className="relative rounded-3xl overflow-hidden bg-black/5 min-h-[300px] max-h-[60vh] shadow-xl w-full flex items-center justify-center border border-foreground/5">
+                                    <div className="relative rounded-3xl overflow-hidden bg-black aspect-[4/5] shadow-xl w-full flex items-center justify-center">
                                         {file.type.startsWith("video/") ? (
-                                            <video src={previewURL!} className="max-w-full max-h-[60vh] object-contain" controls playsInline />
+                                            <video src={previewURL!} className="w-full h-full object-cover" controls playsInline />
                                         ) : (
-                                            <img src={previewURL!} className="max-w-full max-h-[60vh] object-contain" alt="Preview" />
+                                            <img src={previewURL!} className="w-full h-full object-cover" alt="Preview" />
                                         )}
 
                                         {!isProcessing && !isUploading && !isSuccess && (
