@@ -14,8 +14,14 @@ export type Post = {
     createdAt: number;
 };
 
-export default function GalleryGrid({ onSelectPost }: { onSelectPost: (post: any) => void }) {
-    const posts = useQuery(api.posts.listPosts);
+export default function GalleryGrid({
+    onSelectPost,
+    sortBy = "newest"
+}: {
+    onSelectPost: (post: Post) => void;
+    sortBy?: "newest" | "mostLiked";
+}) {
+    const posts = useQuery(api.posts.listPosts, { sortBy });
 
     if (posts === undefined) {
         return (

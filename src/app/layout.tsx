@@ -35,7 +35,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${inter.variable} ${playfair.variable} antialiased bg-stone-100 dark:bg-neutral-950`}
+        className={`${inter.variable} ${playfair.variable} antialiased bg-background`}
       >
         <ConvexClientProvider>
           <div className="max-w-md mx-auto min-h-[100dvh] bg-background shadow-2xl relative flex flex-col overflow-x-hidden">
