@@ -10,6 +10,7 @@ export const sendPost = mutation({
         storageId: v.id("_storage"),
         caption: v.optional(v.string()),
         mediaType: v.union(v.literal("image"), v.literal("video")),
+        authorName: v.string(),
     },
     handler: async (ctx, args) => {
         const identity = await ctx.auth.getUserIdentity();
@@ -29,7 +30,7 @@ export const sendPost = mutation({
         await ctx.db.insert("posts", {
             storageId: args.storageId,
             userId: user._id,
-            authorName: user.name || "Party Guest",
+            authorName: args.authorName,
             caption: args.caption,
             mediaType: args.mediaType,
             createdAt: Date.now(),

@@ -171,6 +171,7 @@ export default function UploadDrawer() {
                 storageId,
                 caption: caption,
                 mediaType,
+                authorName: user.fullName || user.username || "Party Guest",
             });
 
 
