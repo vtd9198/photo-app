@@ -8,7 +8,6 @@ export const generateUploadUrl = mutation(async (ctx) => {
 export const sendPost = mutation({
     args: {
         storageId: v.id("_storage"),
-        authorName: v.optional(v.string()),
         caption: v.optional(v.string()),
         mediaType: v.union(v.literal("image"), v.literal("video")),
     },
@@ -30,13 +29,14 @@ export const sendPost = mutation({
         await ctx.db.insert("posts", {
             storageId: args.storageId,
             userId: user._id,
-            authorName: user.name || args.authorName || "Party Guest",
+            authorName: user.name || "Party Guest",
             caption: args.caption,
             mediaType: args.mediaType,
             createdAt: Date.now(),
         });
     },
 });
+
 
 export const listPosts = query({
     args: {

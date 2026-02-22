@@ -10,7 +10,7 @@ import { motion } from "framer-motion";
 import { Edit2, Check, X, Heart, Image as ImageIcon, Loader2 } from "lucide-react";
 
 export default function ProfilePage() {
-    const { isLoaded: clerkLoaded } = useUser();
+    const { isLoaded: clerkLoaded, isSignedIn } = useUser();
     const user = useQuery(api.users.currentUser);
     const stats = useQuery(api.posts.getUserStats);
     const userPosts = useQuery(api.posts.listUserPosts);
@@ -21,7 +21,7 @@ export default function ProfilePage() {
     const [selectedPost, setSelectedPost] = useState<Post | null>(null);
     const [isSaving, setIsSaving] = useState(false);
 
-    if (!clerkLoaded || user === undefined) {
+    if (!clerkLoaded || (isSignedIn && user === undefined)) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
                 <Loader2 className="animate-spin text-primary/50" size={40} />
@@ -30,10 +30,10 @@ export default function ProfilePage() {
         );
     }
 
-    if (!user) {
+    if (!isSignedIn) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[60vh] px-6 text-center">
-                <p className="text-foreground/60 mb-4">Please sign in to view your profile.</p>
+                <p className="text-foreground/60 mb-4 font-medium">Join the party to view your profile!</p>
                 <div className="scale-125">
                     <UserButton afterSignOutUrl="/" />
                 </div>
@@ -41,13 +41,24 @@ export default function ProfilePage() {
         );
     }
 
+    if (isSignedIn && user === null) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+                <Loader2 className="animate-spin text-primary/50" size={40} />
+                <p className="text-foreground/40 font-medium">Completing your profile setup...</p>
+            </div>
+        );
+    }
+
+
     const handleStartEdit = () => {
+        if (!user) return;
         setNewName(user.name);
         setIsEditing(true);
     };
 
     const handleSaveName = async () => {
-        if (!newName.trim() || newName === user.name) {
+        if (!user || !newName.trim() || newName === user.name) {
             setIsEditing(false);
             return;
         }
@@ -69,12 +80,14 @@ export default function ProfilePage() {
             <div className="px-6 mb-10">
                 <div className="flex items-center gap-6 mb-8">
                     <div className="relative">
-                        <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-primary/10 shadow-xl">
-                            <img
-                                src={user.profileImage}
-                                alt={user.name}
-                                className="w-full h-full object-cover"
-                            />
+                        <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-primary/10 shadow-xl bg-primary/5">
+                            {user?.profileImage && (
+                                <img
+                                    src={user.profileImage}
+                                    alt={user.name}
+                                    className="w-full h-full object-cover"
+                                />
+                            )}
                         </div>
                         <div className="absolute -bottom-1 -right-1 bg-white dark:bg-neutral-900 p-1.5 rounded-full shadow-md border border-primary/5">
                             <UserButton afterSignOutUrl="/" />
@@ -110,7 +123,7 @@ export default function ProfilePage() {
                             ) : (
                                 <>
                                     <h1 className="text-2xl font-bold text-foreground truncate max-w-[180px]">
-                                        {user.name}
+                                        {user?.name || "Party Guest"}
                                     </h1>
                                     <button
                                         onClick={handleStartEdit}
@@ -127,6 +140,7 @@ export default function ProfilePage() {
 
                 {/* Stats Row */}
                 <div className="grid grid-cols-2 gap-4">
+
                     <motion.div
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}

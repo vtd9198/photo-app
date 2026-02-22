@@ -11,6 +11,7 @@ export default function SyncUser() {
 
     useEffect(() => {
         if (isLoaded && user) {
+            console.log("Syncing user to Convex:", user.id);
             syncUser({
                 externalId: user.id,
                 name: user.fullName || user.username || "Party Guest",
@@ -23,3 +24,4 @@ export default function SyncUser() {
 
     return null;
 }
+
