@@ -29,7 +29,7 @@ import { ConvexClientProvider } from "@/providers/ConvexClientProvider";
 import { UploadDrawerProvider } from "@/providers/UploadDrawerProvider";
 import UploadDrawer from "@/components/UploadDrawer";
 import SyncUser from "@/components/SyncUser";
-
+import { LenisProvider } from "@/providers/LenisProvider";
 
 export default function RootLayout({
   children,
@@ -41,20 +41,22 @@ export default function RootLayout({
       <body
         className={`${inter.variable} ${playfair.variable} antialiased bg-background`}
       >
+        <div className="grain-overlay mix-blend-multiply opacity-[0.08] dark:opacity-[0.05]" />
 
-        <ConvexClientProvider>
-          <UploadDrawerProvider>
-            <SyncUser />
-            <div className="max-w-md mx-auto min-h-[100dvh] bg-background shadow-2xl relative flex flex-col overflow-x-hidden">
-
-              <main className="flex-1 pb-24">
-                {children}
-              </main>
-              <BottomNav />
-              <UploadDrawer />
-            </div>
-          </UploadDrawerProvider>
-        </ConvexClientProvider>
+        <LenisProvider>
+          <ConvexClientProvider>
+            <UploadDrawerProvider>
+              <SyncUser />
+              <div className="max-w-md mx-auto min-h-[100dvh] bg-background shadow-2xl relative flex flex-col overflow-x-hidden">
+                <main className="flex-1 pb-24">
+                  {children}
+                </main>
+                <BottomNav />
+                <UploadDrawer />
+              </div>
+            </UploadDrawerProvider>
+          </ConvexClientProvider>
+        </LenisProvider>
       </body>
     </html>
   );

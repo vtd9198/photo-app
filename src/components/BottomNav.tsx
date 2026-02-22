@@ -18,8 +18,8 @@ export default function BottomNav() {
     const pathname = usePathname();
     const { openDrawer } = useUploadDrawer();
 
-    // Hide nav on passcode screen
-    if (pathname === "/passcode") return null;
+    // Hide nav on passcode screen and root invitation page
+    if (pathname === "/passcode" || pathname === "/") return null;
 
     return (
         <div className="fixed bottom-0 w-full max-w-md mx-auto bg-background/70 backdrop-blur-xl border-t border-primary/20 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-2 px-6 z-50">

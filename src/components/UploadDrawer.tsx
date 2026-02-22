@@ -7,7 +7,7 @@ import { useUploadDrawer } from "@/providers/UploadDrawerProvider";
 import { useUser, SignInButton, SignedIn, SignedOut } from "@clerk/nextjs";
 import { useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import imageCompression from "browser-image-compression";
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 import { fetchFile, toBlobURL } from "@ffmpeg/util";
@@ -17,6 +17,7 @@ export default function UploadDrawer() {
     const { isOpen, closeDrawer } = useUploadDrawer();
     const { user } = useUser();
     const router = useRouter();
+    const pathname = usePathname();
 
     const [file, setFile] = useState<File | null>(null);
     const [previewURL, setPreviewURL] = useState<string | null>(null);
@@ -48,6 +49,8 @@ export default function UploadDrawer() {
             }, 300);
         }
     }, [isOpen]);
+
+    if (pathname === "/") return null;
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {

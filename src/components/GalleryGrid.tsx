@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { Play, Heart, AlertCircle } from "lucide-react";
+import { Play, Heart, AlertCircle, Trash2 } from "lucide-react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { cn } from "@/lib/utils";
@@ -16,6 +16,7 @@ export type Post = {
     createdAt: number;
     likeCount?: number;
     isLikedByMe?: boolean;
+    isAuthor?: boolean;
     width?: number;
     height?: number;
 };
@@ -55,9 +56,10 @@ export default function GalleryGrid({
     searchTerm?: string;
     onPostClick?: (post: Post) => void;
 }) {
-    const fetchedPosts = useQuery(api.posts.listPosts, { sortBy, searchTerm });
+    const fetchedPosts = useQuery(api.posts.listPosts, { sortBy, searchTerm }) as Post[] | undefined;
     const toggleLike = useMutation(api.posts.toggleLike);
-    const posts = initialPosts !== undefined ? initialPosts : fetchedPosts;
+    const deletePost = useMutation(api.posts.deletePost);
+    const posts = (initialPosts !== undefined ? initialPosts : fetchedPosts) as Post[] | undefined;
 
     if (posts === undefined) {
         return (
@@ -206,6 +208,20 @@ export default function GalleryGrid({
                                     {post.likeCount || 0}
                                 </span>
                             </div>
+
+                            {post.isAuthor && (
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (confirm("Are you sure you want to delete this memory?")) {
+                                            deletePost({ postId: post._id as any });
+                                        }
+                                    }}
+                                    className="p-1.5 text-foreground/30 hover:text-red-500 transition-colors rounded-full hover:bg-red-500/10"
+                                >
+                                    <Trash2 size={16} />
+                                </button>
+                            )}
                         </div>
 
                         {post.caption && (
