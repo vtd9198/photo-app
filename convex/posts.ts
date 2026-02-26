@@ -8,6 +8,7 @@ export const generateUploadUrl = mutation(async (ctx) => {
 export const sendPost = mutation({
     args: {
         storageId: v.id("_storage"),
+        livePhotoVideoId: v.optional(v.id("_storage")),
         caption: v.optional(v.string()),
         mediaType: v.union(v.literal("image"), v.literal("video")),
         authorName: v.string(),
@@ -39,6 +40,7 @@ export const sendPost = mutation({
 
         await ctx.db.insert("posts", {
             storageId: args.storageId,
+            livePhotoVideoId: args.livePhotoVideoId,
             userId: user._id,
             authorName: args.authorName,
             caption: args.caption,
@@ -88,6 +90,9 @@ export const listPosts = query({
                 return {
                     ...post,
                     mediaUrl: `${process.env.CONVEX_SITE_URL}/getMedia?storageId=${post.storageId}`,
+                    livePhotoVideoUrl: post.livePhotoVideoId
+                        ? `${process.env.CONVEX_SITE_URL}/getMedia?storageId=${post.livePhotoVideoId}`
+                        : undefined,
                     likeCount: likes.length,
                     isLikedByMe,
                 };
@@ -132,6 +137,9 @@ export const listUserPosts = query({
                 return {
                     ...post,
                     mediaUrl: `${process.env.CONVEX_SITE_URL}/getMedia?storageId=${post.storageId}`,
+                    livePhotoVideoUrl: post.livePhotoVideoId
+                        ? `${process.env.CONVEX_SITE_URL}/getMedia?storageId=${post.livePhotoVideoId}`
+                        : undefined,
                     likeCount: likes.length,
                     isLikedByMe,
                 };

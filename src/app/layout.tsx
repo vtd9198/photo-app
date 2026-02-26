@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, Playfair_Display } from "next/font/google";
+import { Suspense } from "react";
 import "./globals.css";
 import BottomNav from "@/components/BottomNav";
 
@@ -49,10 +50,14 @@ export default function RootLayout({
               <SyncUser />
               <div className="max-w-md mx-auto min-h-[100dvh] bg-background shadow-2xl relative flex flex-col overflow-x-hidden">
                 <main className="flex-1 pb-24">
-                  {children}
+                  <Suspense fallback={<div className="min-h-screen bg-background" />}>
+                    {children}
+                  </Suspense>
                 </main>
                 <BottomNav />
-                <UploadDrawer />
+                <Suspense fallback={null}>
+                  <UploadDrawer />
+                </Suspense>
               </div>
             </UploadDrawerProvider>
           </ConvexClientProvider>

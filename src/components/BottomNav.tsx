@@ -21,11 +21,13 @@ export default function BottomNav() {
     // Hide nav on passcode screen and root invitation page
     if (pathname === "/passcode" || pathname === "/") return null;
 
+    const isGalleryActive = pathname === "/photos" || pathname === "/feed";
+
     return (
         <div className="fixed bottom-0 w-full max-w-md mx-auto bg-background/70 backdrop-blur-xl border-t border-primary/20 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-2 px-6 z-50">
 
             <div className="flex justify-between items-center h-14">
-                <NavItem href="/" icon={<ImageIcon size={24} />} isActive={pathname === "/"} label="Gallery" />
+                <NavItem href="/photos" icon={<ImageIcon size={24} />} isActive={isGalleryActive} label="Gallery" />
 
                 {/* Upload FAB trigger */}
                 <div className="relative -top-5">

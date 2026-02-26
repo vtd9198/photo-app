@@ -10,7 +10,7 @@ import confetti from "canvas-confetti";
 // Custom Disco Ball Component
 const DiscoBall = () => (
     <motion.div
-        className="relative w-24 h-24 mb-4"
+        className="relative w-16 h-16 md:w-24 md:h-24 mb-4"
         animate={{ y: [0, -5, 0] }}
         transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
     >
@@ -229,7 +229,7 @@ export default function InvitationPage() {
                                 clipPath: "polygon(0% 5%, 5% 0%, 10% 5%, 15% 0%, 20% 5%, 25% 0%, 30% 5%, 35% 0%, 40% 5%, 45% 0%, 50% 5%, 55% 0%, 60% 5%, 65% 0%, 70% 5%, 75% 0%, 80% 5%, 85% 0%, 90% 5%, 95% 0%, 100% 5%, 100% 95%, 95% 100%, 90% 95%, 85% 100%, 80% 95%, 75% 100%, 70% 95%, 65% 100%, 60% 95%, 55% 100%, 50% 95%, 45% 100%, 40% 95%, 35% 100%, 30% 95%, 25% 100%, 20% 95%, 15% 100%, 10% 95%, 5% 100%, 0% 95%)"
                             }}
                         >
-                            <div className="bg-[#FDFBF7] w-full h-full flex flex-col items-center py-12 px-6 overflow-hidden">
+                            <div className="bg-[#FDFBF7] w-full h-full flex flex-col items-center py-8 md:py-12 px-4 md:px-6 overflow-hidden">
                                 <DiscoBall />
 
                                 <motion.h2
@@ -348,7 +348,7 @@ export default function InvitationPage() {
                                     transition={{ delay: 1, duration: 1 }}
                                     className="absolute bottom-4 w-full flex justify-center pointer-events-none"
                                 >
-                                    <div className="relative w-32 h-20 flex justify-center">
+                                    <div className="relative w-full max-w-[200px] h-20 flex justify-center scale-75 md:scale-100 transform origin-bottom">
                                         {/* Left Glass */}
                                         <motion.svg
                                             width="60" height="80" viewBox="0 0 60 80"

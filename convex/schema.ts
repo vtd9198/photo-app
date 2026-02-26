@@ -9,6 +9,7 @@ export default defineSchema({
     }).index("by_externalId", ["externalId"]),
     posts: defineTable({
         storageId: v.id("_storage"),
+        livePhotoVideoId: v.optional(v.id("_storage")),
         userId: v.optional(v.id("users")),
         authorName: v.string(),
         caption: v.optional(v.string()),

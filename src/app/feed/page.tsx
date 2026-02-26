@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { AnimatePresence } from "framer-motion";
 import GalleryGrid, { type Post } from "@/components/GalleryGrid";
 import MediaModal from "@/components/MediaModal";
 import { UserButton } from "@clerk/nextjs";
@@ -66,7 +67,11 @@ export default function Home() {
 
       <GalleryGrid sortBy={sortBy} searchTerm={searchTerm} onPostClick={setSelectedPost} />
 
-      <MediaModal post={selectedPost} onClose={() => setSelectedPost(null)} />
+      <AnimatePresence>
+        {selectedPost && (
+          <MediaModal post={selectedPost} onClose={() => setSelectedPost(null)} />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

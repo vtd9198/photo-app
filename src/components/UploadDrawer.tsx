@@ -13,6 +13,15 @@ import { FFmpeg } from "@ffmpeg/ffmpeg";
 import { fetchFile, toBlobURL } from "@ffmpeg/util";
 import confetti from "canvas-confetti";
 
+// A Live Photo pair: the still image + its matching .mov video
+type LivePhotoPair = {
+    image: File;
+    video: File;
+};
+
+// Strip extension and lowercase, to detect pairs
+const baseName = (f: File) => f.name.replace(/\.[^.]+$/, "").toLowerCase();
+
 export default function UploadDrawer() {
     const { isOpen, closeDrawer } = useUploadDrawer();
     const { user } = useUser();
@@ -20,14 +29,16 @@ export default function UploadDrawer() {
     const pathname = usePathname();
     if (pathname === "/" || pathname === "/passcode") return null;
 
-    const [file, setFile] = useState<File | null>(null);
-    const [previewURL, setPreviewURL] = useState<string | null>(null);
+    const [isMounted, setIsMounted] = useState(false);
+    const [files, setFiles] = useState<File[]>([]);
+    const [previewURLs, setPreviewURLs] = useState<string[]>([]);
     const [caption, setCaption] = useState("");
     const [isProcessing, setIsProcessing] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
     const [progress, setProgress] = useState(0);
     const [error, setError] = useState<string | null>(null);
     const [isSuccess, setIsSuccess] = useState(false);
+    const [livePhotoPairs, setLivePhotoPairs] = useState<LivePhotoPair[]>([]);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
     const ffmpegRef = useRef<FFmpeg | null>(null);
@@ -35,45 +46,82 @@ export default function UploadDrawer() {
     const generateUploadUrl = useMutation(api.posts.generateUploadUrl);
     const sendPost = useMutation(api.posts.sendPost);
 
+    useEffect(() => {
+        setIsMounted(true);
+    }, []);
+
     // Reset state when drawer closes
     useEffect(() => {
         if (!isOpen) {
             setTimeout(() => {
-                setFile(null);
-                setPreviewURL(null);
+                setFiles([]);
+                setPreviewURLs([]);
                 setCaption("");
                 setIsProcessing(false);
                 setIsUploading(false);
                 setProgress(0);
                 setError(null);
                 setIsSuccess(false);
+                setLivePhotoPairs([]);
             }, 300);
         }
     }, [isOpen]);
 
-    if (pathname === "/") return null;
+    if (!isMounted) return null;
+    if (pathname === "/" || pathname === "/passcode") return null;
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files && e.target.files[0]) {
-            const selectedFile = e.target.files[0];
+        if (e.target.files && e.target.files.length > 0) {
+            const selected = Array.from(e.target.files);
 
-            // Validation
-            const validTypes = ["image/jpeg", "image/png", "image/webp", "video/mp4", "video/quicktime", "video/webm"];
-            if (!validTypes.includes(selectedFile.type)) {
-                setError("Please select a standard image (JPG, PNG, WebP) or video (MP4, MOV, WebM) format.");
+            const validTypes = [
+                "image/jpeg", "image/png", "image/webp", "image/heic", "image/heif",
+                "video/mp4", "video/quicktime", "video/webm",
+            ];
+            const invalidFiles = selected.filter(f => !validTypes.includes(f.type));
+            if (invalidFiles.length > 0) {
+                setError(`${invalidFiles.length} file(s) have unsupported formats.`);
                 return;
             }
 
-            setFile(selectedFile);
-            setPreviewURL(URL.createObjectURL(selectedFile));
+            // Detect Live Photo pairs: same base name, one image + one .mov/quicktime
+            const images = selected.filter(f => f.type.startsWith("image/"));
+            const videos = selected.filter(f => f.type.startsWith("video/"));
+
+            const pairs: LivePhotoPair[] = [];
+            const pairedImageNames = new Set<string>();
+            const pairedVideoNames = new Set<string>();
+
+            for (const img of images) {
+                const match = videos.find(v => baseName(v) === baseName(img));
+                if (match) {
+                    pairs.push({ image: img, video: match });
+                    pairedImageNames.add(img.name);
+                    pairedVideoNames.add(match.name);
+                }
+            }
+
+            // Files that are NOT part of a live photo pair
+            const standaloneFiles = selected.filter(
+                f => !pairedImageNames.has(f.name) && !pairedVideoNames.has(f.name)
+            );
+
+            setLivePhotoPairs(prev => [...prev, ...pairs]);
+            setFiles(prev => [...prev, ...standaloneFiles]);
+
+            // Previews: show live photo images first, then standalone
+            const livePreviews = pairs.map(p => URL.createObjectURL(p.image));
+            const standalonePreviews = standaloneFiles.map(f => URL.createObjectURL(f));
+            setPreviewURLs(prev => [...prev, ...livePreviews, ...standalonePreviews]);
             setError(null);
         }
     };
 
     const clearSelection = () => {
-        setFile(null);
-        setPreviewURL(null);
+        setFiles([]);
+        setPreviewURLs([]);
         setCaption("");
+        setLivePhotoPairs([]);
         if (fileInputRef.current) fileInputRef.current.value = "";
     };
 
@@ -84,7 +132,6 @@ export default function UploadDrawer() {
         }
         const ffmpeg = ffmpegRef.current;
         if (ffmpeg.loaded) return ffmpeg;
-
         await ffmpeg.load({
             coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
             wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
@@ -97,12 +144,11 @@ export default function UploadDrawer() {
             maxSizeMB: 1,
             maxWidthOrHeight: 1920,
             useWebWorker: true,
-            onProgress: (p: number) => setProgress(p * 0.9), // Keep 10% for upload
+            onProgress: (p: number) => setProgress(p * 0.9),
         };
         try {
             return await imageCompression(imageFile, options);
-        } catch (error) {
-            console.error("Image compression error:", error);
+        } catch {
             return imageFile;
         }
     };
@@ -111,14 +157,10 @@ export default function UploadDrawer() {
         const ffmpeg = await loadFFmpeg();
         const inputName = "input.mp4";
         const outputName = "output.mp4";
-
         await ffmpeg.writeFile(inputName, await fetchFile(videoFile));
-
         ffmpeg.on("progress", ({ progress }) => {
-            setProgress(progress * 100 * 0.9); // Keep 10% for upload
+            setProgress(progress * 100 * 0.9);
         });
-
-        // Basic compression: resize to 720p and use crf 28
         await ffmpeg.exec([
             "-i", inputName,
             "-vcodec", "libx264",
@@ -127,85 +169,124 @@ export default function UploadDrawer() {
             "-vf", "scale=-2:720",
             outputName
         ]);
-
         const data = await ffmpeg.readFile(outputName);
-        // data can be a string or Uint8Array, and might use SharedArrayBuffer which causes TS issues
         const blobPart = typeof data === "string" ? data : new Uint8Array(data as Uint8Array);
         return new File([blobPart], videoFile.name, { type: "video/mp4" });
     };
 
+    const getDimensions = (file: File): Promise<{ width?: number; height?: number }> => {
+        return new Promise((resolve) => {
+            if (file.type.startsWith("image/")) {
+                const img = new Image();
+                img.onload = () => resolve({ width: img.width, height: img.height });
+                img.onerror = () => resolve({});
+                img.src = URL.createObjectURL(file);
+            } else if (file.type.startsWith("video/")) {
+                const video = document.createElement("video");
+                video.onloadedmetadata = () => resolve({ width: video.videoWidth, height: video.videoHeight });
+                video.onerror = () => resolve({});
+                video.src = URL.createObjectURL(file);
+            } else {
+                resolve({});
+            }
+        });
+    };
+
+    const uploadFile = async (file: File): Promise<string> => {
+        const postUrl = await generateUploadUrl();
+        const result = await fetch(postUrl, {
+            method: "POST",
+            headers: { "Content-Type": file.type || "application/octet-stream" },
+            body: file,
+        });
+        if (!result.ok) throw new Error(`Upload failed for ${file.name}`);
+        const { storageId } = await result.json();
+        return storageId;
+    };
+
     const handleUpload = async () => {
-        if (!file || !user) return;
+        const totalItems = livePhotoPairs.length + files.length;
+        if (totalItems === 0 || !user) return;
 
         setIsProcessing(true);
         setError(null);
         setProgress(0);
 
         try {
-            let processedFile = file;
+            let itemIndex = 0;
 
-            const getDimensions = (): Promise<{ width?: number; height?: number }> => {
-                return new Promise((resolve) => {
-                    if (file.type.startsWith("image/")) {
-                        const img = new Image();
-                        img.onload = () => resolve({ width: img.width, height: img.height });
-                        img.onerror = () => resolve({});
-                        img.src = URL.createObjectURL(file);
-                    } else if (file.type.startsWith("video/")) {
-                        const video = document.createElement("video");
-                        video.onloadedmetadata = () => resolve({ width: video.videoWidth, height: video.videoHeight });
-                        video.onerror = () => resolve({});
-                        video.src = URL.createObjectURL(file);
-                    } else {
-                        resolve({});
-                    }
+            // Upload Live Photo pairs first
+            for (const pair of livePhotoPairs) {
+                const baseP = (itemIndex / totalItems) * 100;
+                const scale = 1 / totalItems;
+
+                setIsProcessing(true);
+                const dimensions = await getDimensions(pair.image);
+                const compressedImage = await compressImage(pair.image);
+
+                setIsProcessing(false);
+                setIsUploading(true);
+                setProgress(baseP + 45 * scale);
+
+                // Upload image and video in sequence
+                const imageStorageId = await uploadFile(compressedImage);
+                setProgress(baseP + 70 * scale);
+
+                // For the live video, keep it under 3s — skip compression to keep it fast
+                const videoStorageId = await uploadFile(pair.video);
+                setProgress(baseP + 90 * scale);
+
+                await sendPost({
+                    storageId: imageStorageId as any,
+                    livePhotoVideoId: videoStorageId as any,
+                    caption,
+                    mediaType: "image",
+                    authorName: user.fullName || user.username || "Party Guest",
+                    width: dimensions.width,
+                    height: dimensions.height,
                 });
-            };
 
-            const dimensions = await getDimensions();
-
-            if (file.type.startsWith("image/")) {
-                processedFile = await compressImage(file);
-            } else if (file.type.startsWith("video/")) {
-                processedFile = await compressVideo(file);
+                setProgress(baseP + 100 * scale);
+                itemIndex++;
             }
 
-            setIsProcessing(false);
-            setIsUploading(true);
-            setProgress(90);
+            // Upload standalone files
+            for (const file of files) {
+                const baseP = (itemIndex / totalItems) * 100;
+                const scale = 1 / totalItems;
 
-            // 1. Get a temporary upload URL from Convex
-            const postUrl = await generateUploadUrl();
+                setIsProcessing(true);
+                const dimensions = await getDimensions(file);
+                let processedFile = file;
 
-            // 2. Upload the file to Convex Storage
-            const result = await fetch(postUrl, {
-                method: "POST",
-                headers: { "Content-Type": processedFile.type },
-                body: processedFile,
-            });
+                if (file.type.startsWith("image/")) {
+                    processedFile = await compressImage(file);
+                } else if (file.type.startsWith("video/")) {
+                    processedFile = await compressVideo(file);
+                }
 
-            if (!result.ok) throw new Error("Failed to upload to storage");
+                setIsProcessing(false);
+                setIsUploading(true);
+                setProgress(baseP + 90 * scale);
 
-            const { storageId } = await result.json();
-            setProgress(100);
+                const storageId = await uploadFile(processedFile);
+                const mediaType = file.type.startsWith("video/") ? "video" : "image";
 
-            // 3. Save metadata to the Convex Database
-            const mediaType = file.type.startsWith("video/") ? "video" : "image";
-            await sendPost({
-                storageId,
-                caption: caption,
-                mediaType,
-                authorName: user.fullName || user.username || "Party Guest",
-                width: dimensions.width,
-                height: dimensions.height,
-            });
+                await sendPost({
+                    storageId: storageId as any,
+                    caption,
+                    mediaType,
+                    authorName: user.fullName || user.username || "Party Guest",
+                    width: dimensions.width,
+                    height: dimensions.height,
+                });
 
+                setProgress(baseP + 100 * scale);
+                itemIndex++;
+            }
 
-            // Success!
             setIsUploading(false);
             setIsSuccess(true);
-
-            // Celebration!
             confetti({
                 particleCount: 150,
                 spread: 70,
@@ -213,12 +294,10 @@ export default function UploadDrawer() {
                 colors: ["#FFD700", "#FF69B4", "#00CED1", "#9400D3"]
             });
 
-            // Redirect after a short delay
             setTimeout(() => {
                 closeDrawer();
-                router.push("/");
-                router.refresh();
-            }, 3000);
+                router.push("/photos");
+            }, 2000);
 
         } catch (err) {
             console.error("Upload Error:", err);
@@ -227,6 +306,10 @@ export default function UploadDrawer() {
             setIsUploading(false);
         }
     };
+
+    const totalCount = livePhotoPairs.length + files.length;
+    const firstPreview = previewURLs[0];
+    const firstIsLive = livePhotoPairs.length > 0 && previewURLs[0] === URL.createObjectURL(livePhotoPairs[0].image);
 
     return (
         <AnimatePresence>
@@ -263,7 +346,7 @@ export default function UploadDrawer() {
                                 </button>
                             </div>
 
-                            {!file ? (
+                            {totalCount === 0 ? (
                                 <motion.div
                                     initial={{ opacity: 0, scale: 0.95 }}
                                     animate={{ opacity: 1, scale: 1 }}
@@ -273,8 +356,8 @@ export default function UploadDrawer() {
                                     <div className="bg-primary/20 p-4 rounded-full mb-4 group-hover:scale-110 transition-transform">
                                         <UploadCloud size={32} className="text-primary" />
                                     </div>
-                                    <p className="font-semibold text-foreground/80">Tap to select a photo or video</p>
-                                    <p className="text-sm text-foreground/50 mt-1">Images and videos are compressed locally</p>
+                                    <p className="font-semibold text-foreground/80">Tap to select photos or videos</p>
+                                    <p className="text-sm text-foreground/50 mt-1">Live Photos supported · Multi-select enabled</p>
                                 </motion.div>
                             ) : (
                                 <motion.div
@@ -283,19 +366,27 @@ export default function UploadDrawer() {
                                     className="space-y-6"
                                 >
                                     <div className="relative rounded-3xl overflow-hidden bg-black/5 min-h-[300px] max-h-[60vh] shadow-xl w-full flex items-center justify-center border border-foreground/5">
-                                        {file.type.startsWith("video/") ? (
-                                            <video src={previewURL!} className="max-w-full max-h-[60vh] object-contain" controls playsInline />
-                                        ) : (
-                                            <img src={previewURL!} className="max-w-full max-h-[60vh] object-contain" alt="Preview" />
+                                        {firstPreview && (
+                                            <img src={firstPreview} className="max-w-full max-h-[60vh] object-contain" alt="Preview" />
                                         )}
 
-                                        {!isProcessing && !isUploading && !isSuccess && (
-                                            <button
-                                                onClick={clearSelection}
-                                                className="absolute top-4 right-4 bg-black/50 backdrop-blur-md p-2 rounded-full text-white hover:bg-black/70 transition-colors"
-                                            >
-                                                <X size={18} />
-                                            </button>
+                                        {/* Live photo indicator on preview */}
+                                        {livePhotoPairs.length > 0 && (
+                                            <div className="absolute top-4 right-4 flex items-center gap-1.5 bg-black/50 backdrop-blur-md px-2.5 py-1.5 rounded-full border border-white/20">
+                                                <span className="relative flex h-2 w-2">
+                                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-60"></span>
+                                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
+                                                </span>
+                                                <span className="text-white text-[9px] font-black uppercase tracking-widest">
+                                                    {livePhotoPairs.length === 1 ? "Live Photo detected" : `${livePhotoPairs.length} Live Photos`}
+                                                </span>
+                                            </div>
+                                        )}
+
+                                        {totalCount > 1 && (
+                                            <div className="absolute bottom-4 left-4 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full text-white text-xs font-bold border border-white/10">
+                                                +{totalCount - 1} more selected
+                                            </div>
                                         )}
 
                                         {(isProcessing || isUploading) && (
@@ -332,7 +423,7 @@ export default function UploadDrawer() {
                                                     {isProcessing ? "Processing..." : "Sharing Memory..."}
                                                 </h3>
                                                 <p className="text-white/70 text-sm">
-                                                    {isProcessing ? "Optimizing your media for the best quality" : "Uploading to the party server"}
+                                                    {isProcessing ? "Optimising your media for the best quality" : "Uploading to the party server"}
                                                 </p>
                                             </div>
                                         )}
@@ -346,8 +437,14 @@ export default function UploadDrawer() {
                                                 >
                                                     <CheckCircle2 size={80} className="mb-6" />
                                                 </motion.div>
-                                                <h3 className="text-3xl font-serif font-bold mb-2">Memory Shared!</h3>
-                                                <p className="opacity-90">Your contribution to the party has been posted.</p>
+                                                <h3 className="text-3xl font-serif font-bold mb-2">
+                                                    {totalCount > 1 ? "Memories Shared!" : "Memory Shared!"}
+                                                </h3>
+                                                <p className="opacity-90">
+                                                    {totalCount > 1
+                                                        ? `${totalCount} contributions to the party have been posted.`
+                                                        : "Your contribution to the party has been posted."}
+                                                </p>
                                             </div>
                                         )}
                                     </div>
@@ -377,7 +474,7 @@ export default function UploadDrawer() {
                                                     onClick={handleUpload}
                                                     className="w-full bg-primary text-white font-bold py-4 rounded-2xl shadow-lg shadow-primary/30 flex justify-center items-center gap-2"
                                                 >
-                                                    Share Memory
+                                                    Share {totalCount > 1 ? "Memories" : "Memory"}
                                                 </motion.button>
                                             </SignedIn>
                                         </div>
@@ -398,7 +495,8 @@ export default function UploadDrawer() {
                         type="file"
                         className="hidden"
                         ref={fileInputRef}
-                        accept="image/*,video/*"
+                        accept="image/*,video/*,.heic,.heif"
+                        multiple
                         onChange={handleFileChange}
                     />
                 </>
