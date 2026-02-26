@@ -201,7 +201,7 @@ export default function PhotosPage() {
                 {zipStage === 'packing' && (
                     <motion.div
                         initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-[150] flex flex-col items-center justify-center"
+                        className="fixed inset-0 z-50 flex flex-col items-center justify-center"
                         style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(20px)' }}
                     >
                         <motion.div
@@ -209,11 +209,14 @@ export default function PhotosPage() {
                             transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
                             className="mb-6"
                         >
-                            <Package size={56} className="text-[#C9A84C]" />
+                            <Package size={56} className="text-gold" />
                         </motion.div>
                         <h2 className="text-white text-xl font-serif font-bold mb-2">Packing your memories…</h2>
-                        <p className="text-white/40 text-xs tracking-widest uppercase">
+                        <p className="text-white/40 text-xs tracking-widest uppercase mb-4">
                             Bundling {selectedIds.length} {selectedIds.length === 1 ? 'file' : 'files'} into ZIP
+                        </p>
+                        <p className="text-white/60 text-[11px] text-center max-w-xs leading-relaxed">
+                            ⚠️ Keep this tab open. Download will start automatically.
                         </p>
                     </motion.div>
                 )}
