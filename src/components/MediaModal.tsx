@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Download, Heart } from "lucide-react";
+import { X, Download, Heart, Play } from "lucide-react";
 import type { Post } from "./GalleryGrid";
 import { useState, useRef, useCallback, useEffect } from "react";
 
@@ -9,18 +9,10 @@ export default function MediaModal({ post, onClose }: { post: Post; onClose: () 
     const [liked, setLiked] = useState(false);
     const [isPlayingLive, setIsPlayingLive] = useState(false);
     const liveVideoRef = useRef<HTMLVideoElement>(null);
-    const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const isLivePhoto = post.mediaType === 'image' && !!post.livePhotoVideoUrl;
 
-    // Preload live video
-    useEffect(() => {
-        if (isLivePhoto && liveVideoRef.current) {
-            liveVideoRef.current.load();
-        }
-    }, [isLivePhoto]);
-
-    const startLive = useCallback(() => {
+    const playLive = useCallback(() => {
         if (!liveVideoRef.current) return;
         liveVideoRef.current.currentTime = 0;
         liveVideoRef.current.play().catch(() => { });
@@ -33,16 +25,6 @@ export default function MediaModal({ post, onClose }: { post: Post; onClose: () 
         liveVideoRef.current.currentTime = 0;
         setIsPlayingLive(false);
     }, []);
-
-    const handlePointerDown = useCallback(() => {
-        if (!isLivePhoto) return;
-        longPressTimer.current = setTimeout(startLive, 100);
-    }, [isLivePhoto, startLive]);
-
-    const handlePointerUp = useCallback(() => {
-        if (longPressTimer.current) clearTimeout(longPressTimer.current);
-        stopLive();
-    }, [stopLive]);
 
     return (
         <motion.div
@@ -62,27 +44,18 @@ export default function MediaModal({ post, onClose }: { post: Post; onClose: () 
                     </button>
 
                     <div className="flex gap-2 items-center">
-                        {/* Live button */}
-                        {isLivePhoto && (
+                        {/* Play Live button */}
+                        {isLivePhoto && !isPlayingLive && (
                             <motion.button
-                                onPointerDown={handlePointerDown}
-                                onPointerUp={handlePointerUp}
-                                onPointerLeave={handlePointerUp}
-                                onClick={(e) => e.stopPropagation()}
-                                whileTap={{ scale: 0.9 }}
-                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border select-none transition-all duration-150"
-                                style={{
-                                    background: isPlayingLive ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.12)',
-                                    borderColor: isPlayingLive ? 'white' : 'rgba(255,255,255,0.2)',
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    playLive();
                                 }}
+                                whileTap={{ scale: 0.9 }}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/20 border border-white/30 text-white hover:bg-white/30 transition-colors"
                             >
-                                <span className="relative flex h-2 w-2">
-                                    <span className={`absolute inline-flex h-full w-full rounded-full opacity-60 ${isPlayingLive ? 'bg-black animate-ping' : 'bg-white'}`} />
-                                    <span className={`relative inline-flex rounded-full h-2 w-2 ${isPlayingLive ? 'bg-black' : 'bg-white'}`} />
-                                </span>
-                                <span className={`text-[10px] font-black uppercase tracking-widest ${isPlayingLive ? 'text-black' : 'text-white'}`}>
-                                    {isPlayingLive ? 'Playing' : 'LIVE'}
-                                </span>
+                                <Play size={14} fill="white" />
+                                <span className="text-xs font-bold uppercase tracking-widest">Live</span>
                             </motion.button>
                         )}
 
@@ -93,7 +66,7 @@ export default function MediaModal({ post, onClose }: { post: Post; onClose: () 
                                 download
                                 target="_blank"
                                 rel="noreferrer"
-                                className="p-2 bg-white/10 rounded-full text-white"
+                                className="p-2 bg-white/10 rounded-full text-white hover:bg-white/20 transition-colors"
                                 onClick={(e) => e.stopPropagation()}
                             >
                                 <Download size={22} />
@@ -108,9 +81,6 @@ export default function MediaModal({ post, onClose }: { post: Post; onClose: () 
                     drag="y"
                     dragConstraints={{ top: 0, bottom: 0 }}
                     onDragEnd={(_, info) => { if (Math.abs(info.offset.y) > 100) onClose(); }}
-                    onPointerDown={handlePointerDown}
-                    onPointerUp={handlePointerUp}
-                    onPointerLeave={handlePointerUp}
                 >
                     {post.mediaType === 'video' ? (
                         <video
@@ -130,12 +100,12 @@ export default function MediaModal({ post, onClose }: { post: Post; onClose: () 
                                 style={{
                                     aspectRatio: post.width && post.height ? `${post.width}/${post.height}` : undefined,
                                     opacity: isPlayingLive ? 0 : 1,
-                                    transition: 'opacity 0.12s ease',
+                                    transition: 'opacity 0.3s ease',
                                 }}
                                 draggable={false}
                             />
 
-                            {/* Live video — rendered on top, cross-fades */}
+                            {/* Live video — appears when playing */}
                             {isLivePhoto && (
                                 <motion.video
                                     ref={liveVideoRef}

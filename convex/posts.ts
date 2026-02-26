@@ -87,12 +87,15 @@ export const listPosts = query({
                     ? likes.some((like) => like.userId === user._id)
                     : false;
 
+                const mediaUrl = await ctx.storage.getUrl(post.storageId);
+                const livePhotoVideoUrl = post.livePhotoVideoId
+                    ? await ctx.storage.getUrl(post.livePhotoVideoId)
+                    : undefined;
+
                 return {
                     ...post,
-                    mediaUrl: `${process.env.CONVEX_SITE_URL}/getMedia?storageId=${post.storageId}`,
-                    livePhotoVideoUrl: post.livePhotoVideoId
-                        ? `${process.env.CONVEX_SITE_URL}/getMedia?storageId=${post.livePhotoVideoId}`
-                        : undefined,
+                    mediaUrl,
+                    livePhotoVideoUrl,
                     likeCount: likes.length,
                     isLikedByMe,
                 };
@@ -134,12 +137,15 @@ export const listUserPosts = query({
 
                 const isLikedByMe = likes.some((like) => like.userId === user._id);
 
+                const mediaUrl = await ctx.storage.getUrl(post.storageId);
+                const livePhotoVideoUrl = post.livePhotoVideoId
+                    ? await ctx.storage.getUrl(post.livePhotoVideoId)
+                    : undefined;
+
                 return {
                     ...post,
-                    mediaUrl: `${process.env.CONVEX_SITE_URL}/getMedia?storageId=${post.storageId}`,
-                    livePhotoVideoUrl: post.livePhotoVideoId
-                        ? `${process.env.CONVEX_SITE_URL}/getMedia?storageId=${post.livePhotoVideoId}`
-                        : undefined,
+                    mediaUrl,
+                    livePhotoVideoUrl,
                     likeCount: likes.length,
                     isLikedByMe,
                 };
