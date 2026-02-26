@@ -106,7 +106,7 @@ export default function MediaModal({ post, onClose }: { post: Post; onClose: () 
                             />
 
                             {/* Live video — appears when playing */}
-                            {isLivePhoto && (
+                            {isLivePhoto && post.livePhotoVideoUrl && (
                                 <motion.video
                                     ref={liveVideoRef}
                                     src={post.livePhotoVideoUrl}

@@ -11,7 +11,7 @@ import { useRef, useState, useCallback } from "react";
 export type Post = {
     _id: string;
     mediaUrl: string | null;
-    livePhotoVideoUrl?: string;
+    livePhotoVideoUrl?: string | null;
     mediaType: 'image' | 'video';
     caption?: string;
     authorName: string;
