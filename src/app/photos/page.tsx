@@ -42,44 +42,31 @@ export default function PhotosPage() {
 
         setZipStage('packing');
         const zip = new JSZip();
-        const folder = zip.folder("Ala-18th-Birthday-Memories")!;
-        const abortController = new AbortController();
 
-        try {
-            let fileIndex = 1;
-            for (const post of selected) {
-                try {
-                    // Main file
-                    if (post.mediaUrl) {
-                        const res = await fetch(post.mediaUrl, { signal: abortController.signal });
-                        const blob = await res.blob();
-                        const ext = post.mediaType === 'video' ? 'mp4' : 'jpg';
-                        const name = `${fileIndex.toString().padStart(3, '0')}_${post.authorName.replace(/\s+/g, '_')}.${ext}`;
-                        folder.file(name, blob);
-                    }
-                    // Live photo video companion
-                    if (post.livePhotoVideoUrl) {
-                        const res = await fetch(post.livePhotoVideoUrl, { signal: abortController.signal });
-                        const blob = await res.blob();
-                        const name = `${fileIndex.toString().padStart(3, '0')}_${post.authorName.replace(/\s+/g, '_')}_LIVE.mov`;
-                        folder.file(name, blob);
-                    }
-                    fileIndex++;
-                } catch {
-                    // Skip un-fetchable files gracefully
+        for (const post of selected) {
+            try {
+                // Main File
+                if (post.mediaUrl) {
+                    const res = await fetch(post.mediaUrl);
+                    const blob = await res.blob();
+                    const ext = post.mediaType === 'video' ? 'mp4' : 'jpg';
+                    zip.file(`${post.authorName}_${post._id.slice(-4)}.${ext}`, blob);
                 }
+                // Live Photo Companion
+                if (post.livePhotoVideoUrl) {
+                    const res = await fetch(post.livePhotoVideoUrl);
+                    const blob = await res.blob();
+                    zip.file(`${post.authorName}_${post._id.slice(-4)}_LIVE.mov`, blob);
+                }
+            } catch (err) {
+                console.error("Download failed for item", err);
             }
-
-            const content = await zip.generateAsync({ type: "blob", compression: "STORE" });
-            saveAs(content, "Ala-18th-Birthday-Memories.zip");
-            setZipStage('done');
-            setTimeout(() => setZipStage('idle'), 3000);
-        } catch (err) {
-            if (err instanceof Error && err.name !== 'AbortError') {
-                console.error("ZIP download error:", err);
-            }
-            setZipStage('idle');
         }
+
+        const content = await zip.generateAsync({ type: "blob" });
+        saveAs(content, "Ala-18th-Memories.zip");
+        setZipStage('done');
+        setTimeout(() => setZipStage('idle'), 2000);
     };
 
     return (
