@@ -1,506 +1,495 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, UploadCloud, AlertCircle, CheckCircle2 } from "lucide-react";
+import { X, UploadCloud, AlertCircle, CheckCircle2, Lock, ImageIcon, Video } from "lucide-react";
 import { useUploadDrawer } from "@/providers/UploadDrawerProvider";
 import { useUser, SignInButton, SignedIn, SignedOut } from "@clerk/nextjs";
 import { useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { useRouter, usePathname } from "next/navigation";
 import imageCompression from "browser-image-compression";
-import { FFmpeg } from "@ffmpeg/ffmpeg";
-import { fetchFile, toBlobURL } from "@ffmpeg/util";
 import confetti from "canvas-confetti";
 
-// A Live Photo pair: the still image + its matching .mov video
-type LivePhotoPair = {
-    image: File;
-    video: File;
-};
+type LivePair = { image: File; video: File };
+type StandaloneFile = { file: File };
+type UploadItem = { type: 'live'; pair: LivePair } | { type: 'standalone'; item: StandaloneFile };
 
-// Strip extension and lowercase, to detect pairs
 const baseName = (f: File) => f.name.replace(/\.[^.]+$/, "").toLowerCase();
 
+// ── Vault overlay shown during upload ──────────────────────────────────────
+function VaultOverlay({ totalFiles, currentFile, overallProgress, fileProgress, stage }: {
+    totalFiles: number;
+    currentFile: number;
+    overallProgress: number;
+    fileProgress: number;
+    stage: 'processing' | 'uploading';
+}) {
+    return (
+        <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200] flex flex-col items-center justify-center"
+            style={{ background: 'rgba(0,0,0,0.92)', backdropFilter: 'blur(24px)' }}
+        >
+            {/* Animated vault icon */}
+            <motion.div
+                animate={{ scale: [1, 1.06, 1] }}
+                transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+                className="mb-8 relative"
+            >
+                <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-[#C9A84C] to-[#8B6914] flex items-center justify-center shadow-2xl shadow-[#C9A84C]/30">
+                    <Lock size={40} className="text-white" strokeWidth={1.5} />
+                </div>
+                {/* glow ring */}
+                <motion.div
+                    className="absolute inset-0 rounded-3xl border-2 border-[#C9A84C]/60"
+                    animate={{ scale: [1, 1.25, 1], opacity: [0.6, 0, 0.6] }}
+                    transition={{ duration: 2, repeat: Infinity }}
+                />
+            </motion.div>
+
+            <h2 className="text-white text-2xl font-serif font-bold mb-2">Sending to the Vault</h2>
+            <p className="text-white/50 text-xs tracking-widest uppercase mb-10 px-10 text-center">
+                {stage === 'processing'
+                    ? 'Optimising for original quality · Do not close the app'
+                    : 'Encrypted upload in progress · Do not close the app'}
+            </p>
+
+            {/* File progress */}
+            <div className="w-72 mb-6">
+                <div className="flex justify-between items-center mb-2">
+                    <span className="text-[#C9A84C] text-xs font-bold uppercase tracking-widest">
+                        File {currentFile} of {totalFiles}
+                    </span>
+                    <span className="text-white/50 text-xs">{Math.round(fileProgress)}%</span>
+                </div>
+                <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                    <motion.div
+                        className="h-full bg-[#C9A84C] rounded-full"
+                        animate={{ width: `${fileProgress}%` }}
+                        transition={{ duration: 0.3 }}
+                    />
+                </div>
+            </div>
+
+            {/* Overall progress */}
+            <div className="w-72">
+                <div className="flex justify-between items-center mb-2">
+                    <span className="text-white/40 text-[10px] uppercase tracking-widest">Overall</span>
+                    <span className="text-white/40 text-[10px]">{Math.round(overallProgress)}%</span>
+                </div>
+                <div className="h-0.5 bg-white/10 rounded-full overflow-hidden">
+                    <motion.div
+                        className="h-full bg-white/40 rounded-full"
+                        animate={{ width: `${overallProgress}%` }}
+                        transition={{ duration: 0.3 }}
+                    />
+                </div>
+            </div>
+        </motion.div>
+    );
+}
+
+// ── Main UploadDrawer ───────────────────────────────────────────────────────
 export default function UploadDrawer() {
     const { isOpen, closeDrawer } = useUploadDrawer();
     const { user } = useUser();
     const router = useRouter();
     const pathname = usePathname();
-    if (pathname === "/" || pathname === "/passcode") return null;
 
     const [isMounted, setIsMounted] = useState(false);
-    const [files, setFiles] = useState<File[]>([]);
-    const [previewURLs, setPreviewURLs] = useState<string[]>([]);
+    const [uploadItems, setUploadItems] = useState<UploadItem[]>([]);
     const [caption, setCaption] = useState("");
-    const [isProcessing, setIsProcessing] = useState(false);
-    const [isUploading, setIsUploading] = useState(false);
-    const [progress, setProgress] = useState(0);
+    const [stage, setStage] = useState<'idle' | 'processing' | 'uploading' | 'success' | 'error'>('idle');
+    const [fileProgress, setFileProgress] = useState(0);
+    const [overallProgress, setOverallProgress] = useState(0);
+    const [currentFileIdx, setCurrentFileIdx] = useState(0);
     const [error, setError] = useState<string | null>(null);
-    const [isSuccess, setIsSuccess] = useState(false);
-    const [livePhotoPairs, setLivePhotoPairs] = useState<LivePhotoPair[]>([]);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const ffmpegRef = useRef<FFmpeg | null>(null);
-
     const generateUploadUrl = useMutation(api.posts.generateUploadUrl);
     const sendPost = useMutation(api.posts.sendPost);
 
-    useEffect(() => {
-        setIsMounted(true);
-    }, []);
+    useEffect(() => { setIsMounted(true); }, []);
 
-    // Reset state when drawer closes
     useEffect(() => {
         if (!isOpen) {
             setTimeout(() => {
-                setFiles([]);
-                setPreviewURLs([]);
+                setUploadItems([]);
                 setCaption("");
-                setIsProcessing(false);
-                setIsUploading(false);
-                setProgress(0);
+                setStage('idle');
+                setFileProgress(0);
+                setOverallProgress(0);
+                setCurrentFileIdx(0);
                 setError(null);
-                setIsSuccess(false);
-                setLivePhotoPairs([]);
-            }, 300);
+            }, 400);
         }
     }, [isOpen]);
 
     if (!isMounted) return null;
     if (pathname === "/" || pathname === "/passcode") return null;
 
+    const MAX_FILES = 10;
+    const totalItems = uploadItems.length;
+    const isUploading = stage === 'processing' || stage === 'uploading';
+
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files && e.target.files.length > 0) {
-            const selected = Array.from(e.target.files);
+        if (!e.target.files?.length) return;
+        const selected = Array.from(e.target.files);
 
-            const validTypes = [
-                "image/jpeg", "image/png", "image/webp", "image/heic", "image/heif",
-                "video/mp4", "video/quicktime", "video/webm",
-            ];
-            const invalidFiles = selected.filter(f => !validTypes.includes(f.type));
-            if (invalidFiles.length > 0) {
-                setError(`${invalidFiles.length} file(s) have unsupported formats.`);
-                return;
+        const validTypes = [
+            "image/jpeg", "image/png", "image/webp", "image/heic", "image/heif",
+            "video/mp4", "video/quicktime", "video/webm",
+        ];
+        const invalid = selected.filter(f => !validTypes.includes(f.type));
+        if (invalid.length) { setError(`Unsupported format: ${invalid.map(f => f.name).join(', ')}`); return; }
+
+        if (totalItems + selected.length > MAX_FILES) {
+            setError(`Max ${MAX_FILES} files per upload. You have ${totalItems} already.`);
+            return;
+        }
+
+        const images = selected.filter(f => f.type.startsWith("image/"));
+        const videos = selected.filter(f => f.type.startsWith("video/"));
+
+        const newItems: UploadItem[] = [];
+        const usedImages = new Set<string>();
+        const usedVideos = new Set<string>();
+
+        for (const img of images) {
+            const match = videos.find(v => baseName(v) === baseName(img));
+            if (match) {
+                newItems.push({ type: 'live', pair: { image: img, video: match } });
+                usedImages.add(img.name);
+                usedVideos.add(match.name);
             }
-
-            // Detect Live Photo pairs: same base name, one image + one .mov/quicktime
-            const images = selected.filter(f => f.type.startsWith("image/"));
-            const videos = selected.filter(f => f.type.startsWith("video/"));
-
-            const pairs: LivePhotoPair[] = [];
-            const pairedImageNames = new Set<string>();
-            const pairedVideoNames = new Set<string>();
-
-            for (const img of images) {
-                const match = videos.find(v => baseName(v) === baseName(img));
-                if (match) {
-                    pairs.push({ image: img, video: match });
-                    pairedImageNames.add(img.name);
-                    pairedVideoNames.add(match.name);
-                }
+        }
+        for (const f of selected) {
+            if (!usedImages.has(f.name) && !usedVideos.has(f.name)) {
+                newItems.push({ type: 'standalone', item: { file: f } });
             }
-
-            // Files that are NOT part of a live photo pair
-            const standaloneFiles = selected.filter(
-                f => !pairedImageNames.has(f.name) && !pairedVideoNames.has(f.name)
-            );
-
-            setLivePhotoPairs(prev => [...prev, ...pairs]);
-            setFiles(prev => [...prev, ...standaloneFiles]);
-
-            // Previews: show live photo images first, then standalone
-            const livePreviews = pairs.map(p => URL.createObjectURL(p.image));
-            const standalonePreviews = standaloneFiles.map(f => URL.createObjectURL(f));
-            setPreviewURLs(prev => [...prev, ...livePreviews, ...standalonePreviews]);
-            setError(null);
         }
+
+        setUploadItems(prev => [...prev, ...newItems]);
+        setError(null);
     };
 
-    const clearSelection = () => {
-        setFiles([]);
-        setPreviewURLs([]);
-        setCaption("");
-        setLivePhotoPairs([]);
-        if (fileInputRef.current) fileInputRef.current.value = "";
-    };
-
-    const loadFFmpeg = async () => {
-        const baseURL = "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd";
-        if (!ffmpegRef.current) {
-            ffmpegRef.current = new FFmpeg();
-        }
-        const ffmpeg = ffmpegRef.current;
-        if (ffmpeg.loaded) return ffmpeg;
-        await ffmpeg.load({
-            coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
-            wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
-        });
-        return ffmpeg;
-    };
-
-    const compressImage = async (imageFile: File) => {
-        const options = {
-            maxSizeMB: 1,
-            maxWidthOrHeight: 1920,
-            useWebWorker: true,
-            onProgress: (p: number) => setProgress(p * 0.9),
-        };
-        try {
-            return await imageCompression(imageFile, options);
-        } catch {
-            return imageFile;
-        }
-    };
-
-    const compressVideo = async (videoFile: File) => {
-        const ffmpeg = await loadFFmpeg();
-        const inputName = "input.mp4";
-        const outputName = "output.mp4";
-        await ffmpeg.writeFile(inputName, await fetchFile(videoFile));
-        ffmpeg.on("progress", ({ progress }) => {
-            setProgress(progress * 100 * 0.9);
-        });
-        await ffmpeg.exec([
-            "-i", inputName,
-            "-vcodec", "libx264",
-            "-crf", "28",
-            "-preset", "faster",
-            "-vf", "scale=-2:720",
-            outputName
-        ]);
-        const data = await ffmpeg.readFile(outputName);
-        const blobPart = typeof data === "string" ? data : new Uint8Array(data as Uint8Array);
-        return new File([blobPart], videoFile.name, { type: "video/mp4" });
-    };
-
-    const getDimensions = (file: File): Promise<{ width?: number; height?: number }> => {
-        return new Promise((resolve) => {
+    const getDimensions = (file: File): Promise<{ width?: number; height?: number }> =>
+        new Promise((resolve) => {
             if (file.type.startsWith("image/")) {
                 const img = new Image();
                 img.onload = () => resolve({ width: img.width, height: img.height });
                 img.onerror = () => resolve({});
                 img.src = URL.createObjectURL(file);
             } else if (file.type.startsWith("video/")) {
-                const video = document.createElement("video");
-                video.onloadedmetadata = () => resolve({ width: video.videoWidth, height: video.videoHeight });
-                video.onerror = () => resolve({});
-                video.src = URL.createObjectURL(file);
-            } else {
-                resolve({});
-            }
+                const vid = document.createElement("video");
+                vid.onloadedmetadata = () => resolve({ width: vid.videoWidth, height: vid.videoHeight });
+                vid.onerror = () => resolve({});
+                vid.src = URL.createObjectURL(file);
+            } else resolve({});
         });
+
+    const compressImage = async (file: File, onProgress: (p: number) => void) => {
+        try {
+            return await imageCompression(file, {
+                maxSizeMB: 1.5,
+                maxWidthOrHeight: 2160,
+                useWebWorker: true,
+                preserveExif: true,
+                onProgress,
+            });
+        } catch { return file; }
     };
 
     const uploadFile = async (file: File): Promise<string> => {
-        const postUrl = await generateUploadUrl();
-        const result = await fetch(postUrl, {
+        const url = await generateUploadUrl();
+        const res = await fetch(url, {
             method: "POST",
             headers: { "Content-Type": file.type || "application/octet-stream" },
             body: file,
         });
-        if (!result.ok) throw new Error(`Upload failed for ${file.name}`);
-        const { storageId } = await result.json();
+        if (!res.ok) throw new Error(`Upload failed: ${file.name}`);
+        const { storageId } = await res.json();
         return storageId;
     };
 
     const handleUpload = async () => {
-        const totalItems = livePhotoPairs.length + files.length;
-        if (totalItems === 0 || !user) return;
-
-        setIsProcessing(true);
+        if (!totalItems || !user) return;
+        setStage('processing');
         setError(null);
-        setProgress(0);
 
         try {
-            let itemIndex = 0;
+            for (let i = 0; i < uploadItems.length; i++) {
+                const item = uploadItems[i];
+                setCurrentFileIdx(i + 1);
+                setFileProgress(0);
+                setOverallProgress((i / uploadItems.length) * 100);
 
-            // Upload Live Photo pairs first
-            for (const pair of livePhotoPairs) {
-                const baseP = (itemIndex / totalItems) * 100;
-                const scale = 1 / totalItems;
+                if (item.type === 'live') {
+                    const { image, video } = item.pair;
+                    const dims = await getDimensions(image);
 
-                setIsProcessing(true);
-                const dimensions = await getDimensions(pair.image);
-                const compressedImage = await compressImage(pair.image);
+                    setStage('processing');
+                    const compressed = await compressImage(image, (p) => setFileProgress(p * 0.5));
 
-                setIsProcessing(false);
-                setIsUploading(true);
-                setProgress(baseP + 45 * scale);
+                    setStage('uploading');
+                    const imageId = await uploadFile(compressed);
+                    setFileProgress(70);
 
-                // Upload image and video in sequence
-                const imageStorageId = await uploadFile(compressedImage);
-                setProgress(baseP + 70 * scale);
+                    const videoId = await uploadFile(video);
+                    setFileProgress(90);
 
-                // For the live video, keep it under 3s — skip compression to keep it fast
-                const videoStorageId = await uploadFile(pair.video);
-                setProgress(baseP + 90 * scale);
+                    await sendPost({
+                        storageId: imageId as any,
+                        livePhotoVideoId: videoId as any,
+                        caption,
+                        mediaType: "image",
+                        authorName: user.fullName || user.username || "Party Guest",
+                        ...dims,
+                    });
 
-                await sendPost({
-                    storageId: imageStorageId as any,
-                    livePhotoVideoId: videoStorageId as any,
-                    caption,
-                    mediaType: "image",
-                    authorName: user.fullName || user.username || "Party Guest",
-                    width: dimensions.width,
-                    height: dimensions.height,
-                });
+                } else {
+                    const { file } = item.item;
+                    const dims = await getDimensions(file);
 
-                setProgress(baseP + 100 * scale);
-                itemIndex++;
-            }
-
-            // Upload standalone files
-            for (const file of files) {
-                const baseP = (itemIndex / totalItems) * 100;
-                const scale = 1 / totalItems;
-
-                setIsProcessing(true);
-                const dimensions = await getDimensions(file);
-                let processedFile = file;
-
-                if (file.type.startsWith("image/")) {
-                    processedFile = await compressImage(file);
-                } else if (file.type.startsWith("video/")) {
-                    processedFile = await compressVideo(file);
+                    if (file.type.startsWith("image/")) {
+                        setStage('processing');
+                        const compressed = await compressImage(file, (p) => setFileProgress(p * 0.7));
+                        setStage('uploading');
+                        const storageId = await uploadFile(compressed);
+                        setFileProgress(90);
+                        await sendPost({
+                            storageId: storageId as any,
+                            caption,
+                            mediaType: "image",
+                            authorName: user.fullName || user.username || "Party Guest",
+                            ...dims,
+                        });
+                    } else {
+                        setStage('uploading');
+                        const storageId = await uploadFile(file);
+                        setFileProgress(90);
+                        await sendPost({
+                            storageId: storageId as any,
+                            caption,
+                            mediaType: "video",
+                            authorName: user.fullName || user.username || "Party Guest",
+                            ...dims,
+                        });
+                    }
                 }
 
-                setIsProcessing(false);
-                setIsUploading(true);
-                setProgress(baseP + 90 * scale);
-
-                const storageId = await uploadFile(processedFile);
-                const mediaType = file.type.startsWith("video/") ? "video" : "image";
-
-                await sendPost({
-                    storageId: storageId as any,
-                    caption,
-                    mediaType,
-                    authorName: user.fullName || user.username || "Party Guest",
-                    width: dimensions.width,
-                    height: dimensions.height,
-                });
-
-                setProgress(baseP + 100 * scale);
-                itemIndex++;
+                setFileProgress(100);
+                setOverallProgress(((i + 1) / uploadItems.length) * 100);
             }
 
-            setIsUploading(false);
-            setIsSuccess(true);
-            confetti({
-                particleCount: 150,
-                spread: 70,
-                origin: { y: 0.6 },
-                colors: ["#FFD700", "#FF69B4", "#00CED1", "#9400D3"]
-            });
-
-            setTimeout(() => {
-                closeDrawer();
-                router.push("/photos");
-            }, 2000);
+            setStage('success');
+            confetti({ particleCount: 120, spread: 65, origin: { y: 0.6 }, colors: ["#C9A84C", "#FDFBF7", "#D2B48C"] });
+            setTimeout(() => { closeDrawer(); router.push("/photos"); }, 2200);
 
         } catch (err) {
-            console.error("Upload Error:", err);
-            setError(err instanceof Error ? err.message : "An error occurred during upload.");
-            setIsProcessing(false);
-            setIsUploading(false);
+            setError(err instanceof Error ? err.message : "Upload failed.");
+            setStage('error');
         }
     };
 
-    const totalCount = livePhotoPairs.length + files.length;
-    const firstPreview = previewURLs[0];
-    const firstIsLive = livePhotoPairs.length > 0 && previewURLs[0] === URL.createObjectURL(livePhotoPairs[0].image);
+    const firstPreview = uploadItems[0]
+        ? uploadItems[0].type === 'live'
+            ? URL.createObjectURL(uploadItems[0].pair.image)
+            : URL.createObjectURL(uploadItems[0].item.file)
+        : null;
+
+    const hasLive = uploadItems.some(u => u.type === 'live');
+    const liveCount = uploadItems.filter(u => u.type === 'live').length;
+    const photoCount = uploadItems.filter(u => u.type === 'standalone' && u.item.file.type.startsWith('image/')).length;
+    const videoCount = uploadItems.filter(u => u.type === 'standalone' && u.item.file.type.startsWith('video/')).length;
 
     return (
-        <AnimatePresence>
-            {isOpen && (
-                <>
-                    {/* Backdrop */}
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        onClick={closeDrawer}
-                        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100]"
+        <>
+            {/* Vault overlay — above everything */}
+            <AnimatePresence>
+                {isUploading && (
+                    <VaultOverlay
+                        totalFiles={totalItems}
+                        currentFile={currentFileIdx}
+                        overallProgress={overallProgress}
+                        fileProgress={fileProgress}
+                        stage={stage as 'processing' | 'uploading'}
                     />
+                )}
+            </AnimatePresence>
 
-                    {/* Drawer */}
-                    <motion.div
-                        initial={{ y: "100%" }}
-                        animate={{ y: 0 }}
-                        exit={{ y: "100%" }}
-                        transition={{ type: "spring", damping: 25, stiffness: 200 }}
-                        className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-background rounded-t-[32px] shadow-2xl z-[101] overflow-hidden flex flex-col max-h-[92vh]"
-                    >
-                        {/* Handle */}
-                        <div className="w-12 h-1.5 bg-foreground/10 rounded-full mx-auto mt-4 mb-2" />
+            <AnimatePresence>
+                {isOpen && (
+                    <>
+                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                            onClick={closeDrawer}
+                            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100]"
+                        />
 
-                        <div className="px-6 pb-10 pt-2 overflow-y-auto">
-                            <div className="flex justify-between items-center mb-6">
-                                <h2 className="text-2xl font-serif font-bold">New Memory</h2>
-                                <button
-                                    onClick={closeDrawer}
-                                    className="p-2 bg-foreground/5 rounded-full text-foreground/60 hover:bg-foreground/10 transition-colors"
-                                >
-                                    <X size={20} />
-                                </button>
-                            </div>
+                        <motion.div
+                            initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
+                            transition={{ type: "spring", damping: 26, stiffness: 210 }}
+                            className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-background rounded-t-[30px] shadow-2xl z-[101] flex flex-col max-h-[92vh]"
+                        >
+                            <div className="w-12 h-1.5 bg-foreground/10 rounded-full mx-auto mt-4 mb-2" />
 
-                            {totalCount === 0 ? (
-                                <motion.div
-                                    initial={{ opacity: 0, scale: 0.95 }}
-                                    animate={{ opacity: 1, scale: 1 }}
-                                    className="border-2 border-dashed border-primary/30 rounded-3xl bg-primary/5 h-64 flex flex-col items-center justify-center cursor-pointer mb-6 hover:bg-primary/10 transition-colors group"
-                                    onClick={() => fileInputRef.current?.click()}
-                                >
-                                    <div className="bg-primary/20 p-4 rounded-full mb-4 group-hover:scale-110 transition-transform">
-                                        <UploadCloud size={32} className="text-primary" />
+                            <div className="px-6 pb-10 pt-2 overflow-y-auto">
+                                {/* Header */}
+                                <div className="flex justify-between items-center mb-5">
+                                    <div>
+                                        <h2 className="text-xl font-serif font-bold">New Memory</h2>
+                                        <p className="text-[10px] text-foreground/40 uppercase tracking-widest mt-0.5">
+                                            Live Photos supported · Up to {MAX_FILES} files
+                                        </p>
                                     </div>
-                                    <p className="font-semibold text-foreground/80">Tap to select photos or videos</p>
-                                    <p className="text-sm text-foreground/50 mt-1">Live Photos supported · Multi-select enabled</p>
-                                </motion.div>
-                            ) : (
-                                <motion.div
-                                    initial={{ opacity: 0, y: 20 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    className="space-y-6"
-                                >
-                                    <div className="relative rounded-3xl overflow-hidden bg-black/5 min-h-[300px] max-h-[60vh] shadow-xl w-full flex items-center justify-center border border-foreground/5">
-                                        {firstPreview && (
-                                            <img src={firstPreview} className="max-w-full max-h-[60vh] object-contain" alt="Preview" />
-                                        )}
-
-                                        {/* Live photo indicator on preview */}
-                                        {livePhotoPairs.length > 0 && (
-                                            <div className="absolute top-4 right-4 flex items-center gap-1.5 bg-black/50 backdrop-blur-md px-2.5 py-1.5 rounded-full border border-white/20">
-                                                <span className="relative flex h-2 w-2">
-                                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-60"></span>
-                                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
-                                                </span>
-                                                <span className="text-white text-[9px] font-black uppercase tracking-widest">
-                                                    {livePhotoPairs.length === 1 ? "Live Photo detected" : `${livePhotoPairs.length} Live Photos`}
-                                                </span>
-                                            </div>
-                                        )}
-
-                                        {totalCount > 1 && (
-                                            <div className="absolute bottom-4 left-4 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full text-white text-xs font-bold border border-white/10">
-                                                +{totalCount - 1} more selected
-                                            </div>
-                                        )}
-
-                                        {(isProcessing || isUploading) && (
-                                            <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] flex flex-col items-center justify-center p-8 text-center">
-                                                <div className="relative w-20 h-20 mb-6">
-                                                    <svg className="w-full h-full" viewBox="0 0 100 100">
-                                                        <circle
-                                                            className="text-white/20 stroke-current"
-                                                            strokeWidth="4"
-                                                            fill="transparent"
-                                                            r="38"
-                                                            cx="50"
-                                                            cy="50"
-                                                        />
-                                                        <motion.circle
-                                                            className="text-primary stroke-current"
-                                                            strokeWidth="4"
-                                                            strokeLinecap="round"
-                                                            fill="transparent"
-                                                            r="38"
-                                                            cx="50"
-                                                            cy="50"
-                                                            initial={{ pathLength: 0 }}
-                                                            animate={{ pathLength: progress / 100 }}
-                                                            transition={{ duration: 0.5 }}
-                                                            style={{ rotate: -90, transformOrigin: "50% 50%" }}
-                                                        />
-                                                    </svg>
-                                                    <div className="absolute inset-0 flex items-center justify-center">
-                                                        <span className="text-white font-bold text-lg">{Math.round(progress)}%</span>
-                                                    </div>
-                                                </div>
-                                                <h3 className="text-white font-bold text-xl mb-2">
-                                                    {isProcessing ? "Processing..." : "Sharing Memory..."}
-                                                </h3>
-                                                <p className="text-white/70 text-sm">
-                                                    {isProcessing ? "Optimising your media for the best quality" : "Uploading to the party server"}
-                                                </p>
-                                            </div>
-                                        )}
-
-                                        {isSuccess && (
-                                            <div className="absolute inset-0 bg-primary/90 backdrop-blur-md flex flex-col items-center justify-center p-8 text-center text-white">
-                                                <motion.div
-                                                    initial={{ scale: 0 }}
-                                                    animate={{ scale: 1 }}
-                                                    transition={{ type: "spring", damping: 12 }}
-                                                >
-                                                    <CheckCircle2 size={80} className="mb-6" />
-                                                </motion.div>
-                                                <h3 className="text-3xl font-serif font-bold mb-2">
-                                                    {totalCount > 1 ? "Memories Shared!" : "Memory Shared!"}
-                                                </h3>
-                                                <p className="opacity-90">
-                                                    {totalCount > 1
-                                                        ? `${totalCount} contributions to the party have been posted.`
-                                                        : "Your contribution to the party has been posted."}
-                                                </p>
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {!isProcessing && !isUploading && !isSuccess && (
-                                        <div className="space-y-4">
-                                            <textarea
-                                                value={caption}
-                                                onChange={(e) => setCaption(e.target.value)}
-                                                placeholder="Add a caption... (optional)"
-                                                className="w-full bg-foreground/5 border border-foreground/10 py-4 px-5 rounded-2xl resize-none h-24 focus:outline-none focus:ring-2 focus:ring-primary/20 shadow-sm transition-all"
-                                            />
-
-                                            <SignedOut>
-                                                <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 p-6 rounded-2xl text-center">
-                                                    <p className="text-amber-800 dark:text-amber-200 text-sm mb-4">Sign in to share this memory!</p>
-                                                    <SignInButton mode="modal">
-                                                        <button className="w-full bg-amber-500 text-white font-bold py-3 rounded-xl">Sign In</button>
-                                                    </SignInButton>
-                                                </div>
-                                            </SignedOut>
-
-                                            <SignedIn>
-                                                <motion.button
-                                                    whileHover={{ scale: 1.02 }}
-                                                    whileTap={{ scale: 0.98 }}
-                                                    onClick={handleUpload}
-                                                    className="w-full bg-primary text-white font-bold py-4 rounded-2xl shadow-lg shadow-primary/30 flex justify-center items-center gap-2"
-                                                >
-                                                    Share {totalCount > 1 ? "Memories" : "Memory"}
-                                                </motion.button>
-                                            </SignedIn>
-                                        </div>
-                                    )}
-                                </motion.div>
-                            )}
-
-                            {error && (
-                                <div className="mt-4 bg-red-50 text-red-500 p-4 rounded-2xl text-sm flex gap-3 border border-red-100 dark:bg-red-950/30 dark:border-red-900/50">
-                                    <AlertCircle size={18} className="shrink-0" />
-                                    <p>{error}</p>
+                                    <button onClick={closeDrawer} className="p-2 bg-foreground/5 rounded-full text-foreground/60">
+                                        <X size={20} />
+                                    </button>
                                 </div>
-                            )}
-                        </div>
-                    </motion.div>
 
-                    <input
-                        type="file"
-                        className="hidden"
-                        ref={fileInputRef}
-                        accept="image/*,video/*,.heic,.heif"
-                        multiple
-                        onChange={handleFileChange}
-                    />
-                </>
-            )}
-        </AnimatePresence>
+                                {/* No files selected */}
+                                {totalItems === 0 ? (
+                                    <motion.div
+                                        initial={{ opacity: 0, scale: 0.97 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        onClick={() => fileInputRef.current?.click()}
+                                        className="border-2 border-dashed border-primary/30 rounded-3xl bg-primary/5 h-60 flex flex-col items-center justify-center cursor-pointer mb-6 hover:bg-primary/10 transition-colors group"
+                                    >
+                                        <div className="bg-primary/20 p-4 rounded-full mb-3 group-hover:scale-110 transition-transform">
+                                            <UploadCloud size={30} className="text-primary" />
+                                        </div>
+                                        <p className="font-semibold text-foreground/80">Tap to select memories</p>
+                                        <p className="text-xs text-foreground/40 mt-1 px-6 text-center">
+                                            Select a photo + its matching video to share as a Live Photo
+                                        </p>
+                                    </motion.div>
+                                ) : (
+                                    <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
+
+                                        {/* Preview */}
+                                        <div className="relative rounded-3xl overflow-hidden bg-black/5 min-h-[260px] max-h-[50vh] shadow-xl flex items-center justify-center border border-foreground/5">
+                                            {firstPreview && (
+                                                uploadItems[0].type === 'standalone' && uploadItems[0].item.file.type.startsWith('video/')
+                                                    ? <video src={firstPreview} className="max-w-full max-h-[50vh] object-contain" muted autoPlay loop playsInline />
+                                                    : <img src={firstPreview} className="max-w-full max-h-[50vh] object-contain" alt="Preview" />
+                                            )}
+
+                                            {/* Live badge on preview */}
+                                            {hasLive && (
+                                                <div className="absolute top-3 right-3 flex items-center gap-1.5 bg-black/60 backdrop-blur-md px-2.5 py-1.5 rounded-full border border-white/20">
+                                                    <span className="relative flex h-2 w-2">
+                                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#C9A84C] opacity-60" />
+                                                        <span className="relative inline-flex rounded-full h-2 w-2 bg-[#C9A84C]" />
+                                                    </span>
+                                                    <span className="text-white text-[9px] font-black uppercase tracking-widest">
+                                                        {liveCount} Live {liveCount === 1 ? 'Photo' : 'Photos'}
+                                                    </span>
+                                                </div>
+                                            )}
+
+                                            {/* Success state */}
+                                            <AnimatePresence>
+                                                {stage === 'success' && (
+                                                    <motion.div
+                                                        initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                                                        className="absolute inset-0 bg-primary/90 backdrop-blur-md flex flex-col items-center justify-center text-white"
+                                                    >
+                                                        <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', damping: 12 }}>
+                                                            <CheckCircle2 size={72} className="mb-4" />
+                                                        </motion.div>
+                                                        <h3 className="text-2xl font-serif font-bold mb-1">Memories Saved!</h3>
+                                                        <p className="opacity-80 text-sm">Redirecting to gallery…</p>
+                                                    </motion.div>
+                                                )}
+                                            </AnimatePresence>
+                                        </div>
+
+                                        {/* File summary chips */}
+                                        <div className="flex flex-wrap gap-2">
+                                            {liveCount > 0 && (
+                                                <div className="flex items-center gap-1 bg-[#C9A84C]/15 border border-[#C9A84C]/30 px-2.5 py-1 rounded-full">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-[#C9A84C]" />
+                                                    <span className="text-[10px] font-bold text-[#8B6914] dark:text-[#C9A84C] uppercase tracking-wider">{liveCount} Live</span>
+                                                </div>
+                                            )}
+                                            {photoCount > 0 && (
+                                                <div className="flex items-center gap-1 bg-primary/10 border border-primary/20 px-2.5 py-1 rounded-full">
+                                                    <ImageIcon size={10} className="text-primary" />
+                                                    <span className="text-[10px] font-bold text-primary uppercase tracking-wider">{photoCount} Photo{photoCount > 1 ? 's' : ''}</span>
+                                                </div>
+                                            )}
+                                            {videoCount > 0 && (
+                                                <div className="flex items-center gap-1 bg-foreground/5 border border-foreground/10 px-2.5 py-1 rounded-full">
+                                                    <Video size={10} className="text-foreground/60" />
+                                                    <span className="text-[10px] font-bold text-foreground/60 uppercase tracking-wider">{videoCount} Video{videoCount > 1 ? 's' : ''}</span>
+                                                </div>
+                                            )}
+                                            <button
+                                                onClick={() => fileInputRef.current?.click()}
+                                                className="text-[10px] font-bold text-primary/70 border border-primary/20 px-2.5 py-1 rounded-full"
+                                            >
+                                                + Add more
+                                            </button>
+                                        </div>
+
+                                        {/* Caption + upload button */}
+                                        {stage !== 'success' && (
+                                            <div className="space-y-3">
+                                                <textarea
+                                                    value={caption}
+                                                    onChange={(e) => setCaption(e.target.value)}
+                                                    placeholder="Add a caption… (optional)"
+                                                    className="w-full bg-foreground/5 border border-foreground/10 py-3 px-4 rounded-2xl resize-none h-20 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                                                />
+
+                                                <SignedOut>
+                                                    <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 p-5 rounded-2xl text-center">
+                                                        <p className="text-amber-800 dark:text-amber-200 text-sm mb-3">Sign in to share this memory!</p>
+                                                        <SignInButton mode="modal">
+                                                            <button className="w-full bg-amber-500 text-white font-bold py-3 rounded-xl">Sign In</button>
+                                                        </SignInButton>
+                                                    </div>
+                                                </SignedOut>
+
+                                                <SignedIn>
+                                                    <motion.button
+                                                        whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+                                                        onClick={handleUpload}
+                                                        className="w-full font-bold py-4 rounded-2xl shadow-lg flex justify-center items-center gap-2 text-white"
+                                                        style={{ background: 'linear-gradient(135deg, #C9A84C, #8B6914)' }}
+                                                    >
+                                                        <Lock size={16} />
+                                                        Send to the Vault
+                                                    </motion.button>
+                                                </SignedIn>
+                                            </div>
+                                        )}
+                                    </motion.div>
+                                )}
+
+                                {error && (
+                                    <div className="mt-4 bg-red-50 text-red-500 p-4 rounded-2xl text-sm flex gap-3 border border-red-100 dark:bg-red-950/30 dark:border-red-900/50">
+                                        <AlertCircle size={18} className="shrink-0 mt-0.5" />
+                                        <p>{error}</p>
+                                    </div>
+                                )}
+                            </div>
+                        </motion.div>
+                    </>
+                )}
+            </AnimatePresence>
+
+            <input
+                type="file"
+                className="hidden"
+                ref={fileInputRef}
+                accept="image/*,video/*,.heic,.heif"
+                multiple
+                onChange={handleFileChange}
+            />
+        </>
     );
 }
