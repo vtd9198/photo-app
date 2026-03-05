@@ -1,6 +1,6 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
-
+// fix this
 export default defineSchema({
   posts: defineTable({
     authorName: v.string(),
@@ -25,3 +25,4 @@ export default defineSchema({
     profileImage: v.string(),
   }).index("by_externalId", ["externalId"]),
 });
+
