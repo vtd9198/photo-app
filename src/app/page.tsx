@@ -67,10 +67,10 @@ const translations = {
         when: "Kiedy",
         where: "Gdzie",
         dressCodeLabel: "Dress Code",
-        dressCodeValue: "Elegancko i Świątecznie",
+        dressCodeValue: "Poker Night",
         enterParty: "WEJDŹ NA IMPREZĘ",
         returnEnvelope: "Wróć do koperty",
-        location: "Grand Ballroom",
+        location: "Aleja Krakowska 99A (Raszyn)",
         time: "20.03.2026 | 18:00",
     },
     vi: {
